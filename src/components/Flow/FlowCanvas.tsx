@@ -10,6 +10,8 @@ import ReactFlow, {
     SelectionMode,
     Connection,
     OnConnectStartParams,
+    updateEdge,
+    Edge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowStore } from '../../store/useFlowStore';
@@ -29,9 +31,9 @@ export function FlowCanvas() {
     const reactFlowInstance = useReactFlow();
     const canvasRef = useRef<HTMLDivElement>(null);
     const { setIsInteracting } = useFlowStore();
+    const edgeUpdateSuccessful = useRef(true);
 
     const [connectStartParams, setConnectStartParams] = useState<OnConnectStartParams | null>(null);
-
 
     const {
         nodes,
@@ -46,6 +48,7 @@ export function FlowCanvas() {
         setSelectedEdges,
         clearSelection,
         setMode,
+        selectedNodes,
     } = useFlowStore();
 
     const onConnectStart = useCallback((event: React.MouseEvent | React.TouchEvent, params: OnConnectStartParams) => {
@@ -55,6 +58,32 @@ export function FlowCanvas() {
     const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
         setConnectStartParams(null);
     }, []);
+
+    // Handle edge updates (dragging endpoints)
+    const onEdgeUpdateStart = useCallback(() => {
+        edgeUpdateSuccessful.current = false;
+    }, []);
+
+    const onEdgeUpdate = useCallback(
+        (oldEdge: Edge, newConnection: Connection) => {
+            edgeUpdateSuccessful.current = true;
+            const updatedEdges = updateEdge(oldEdge, newConnection, edges);
+            onEdgesChange(updatedEdges.map(edge => ({ type: 'reset', item: edge })));
+        },
+        [edges, onEdgesChange]
+    );
+
+    const onEdgeUpdateEnd = useCallback(
+        (_: any, edge: Edge) => {
+            if (!edgeUpdateSuccessful.current) {
+                // If update failed, you could delete the edge or restore it
+                // For now, we'll just leave it as is
+            }
+            edgeUpdateSuccessful.current = true;
+        },
+        []
+    );
+
     // Handle canvas click based on mode
     const handleCanvasClick = useCallback((event: React.MouseEvent) => {
         if (mode === 'node') {
@@ -89,10 +118,18 @@ export function FlowCanvas() {
     const handleNodeClick: NodeMouseHandler = useCallback((event, node) => {
         event.stopPropagation();
         if (mode === 'select') {
-            setSelectedNodes([node.id]);
+            // Handle multi-selection with Shift key
+            if (event.shiftKey) {
+                const newSelection = selectedNodes.includes(node.id)
+                    ? selectedNodes.filter(id => id !== node.id)
+                    : [...selectedNodes, node.id];
+                setSelectedNodes(newSelection);
+            } else {
+                setSelectedNodes([node.id]);
+            }
             setSelectedEdges([]);
         }
-    }, [mode, setSelectedNodes, setSelectedEdges]);
+    }, [mode, selectedNodes, setSelectedNodes, setSelectedEdges]);
 
     const handleEdgeClick = useCallback((event: React.MouseEvent, edge: any) => {
         event.stopPropagation();
@@ -109,8 +146,12 @@ export function FlowCanvas() {
     }, [mode, clearSelection]);
 
     const handleSelectionChange = useCallback(({ nodes, edges }: any) => {
-        setSelectedNodes(nodes.map((n: any) => n.id));
-        setSelectedEdges(edges.map((e: any) => e.id));
+        // Only update if actually different to prevent flicker
+        const newNodeIds = nodes.map((n: any) => n.id);
+        const newEdgeIds = edges.map((e: any) => e.id);
+
+        setSelectedNodes(newNodeIds);
+        setSelectedEdges(newEdgeIds);
     }, [setSelectedNodes, setSelectedEdges]);
 
     // Change cursor based on mode
@@ -144,12 +185,16 @@ export function FlowCanvas() {
                 onNodeDragStop={() => setIsInteracting(false)}
                 onSelectionDragStart={() => setIsInteracting(true)}
                 onSelectionDragStop={() => setIsInteracting(false)}
+                onEdgeUpdate={onEdgeUpdate}
+                onEdgeUpdateStart={onEdgeUpdateStart}
+                onEdgeUpdateEnd={onEdgeUpdateEnd}
                 edgesUpdatable={true}
                 edgesFocusable={true}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 connectionMode={ConnectionMode.Loose}
                 selectionMode={SelectionMode.Partial}
+                multiSelectionKeyCode="Shift"
                 snapToGrid={gridEnabled}
                 snapGrid={[10, 10]}
                 defaultEdgeOptions={{

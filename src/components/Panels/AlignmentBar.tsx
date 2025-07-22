@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     AlignHorizontalJustifyCenter,
     AlignVerticalJustifyCenter,
@@ -11,9 +11,23 @@ import { useFlowStore } from '../../store/useFlowStore';
 export function AlignmentBar() {
     const { getNodes, setNodes } = useReactFlow();
     const { selectedNodes, setUnsavedChanges } = useFlowStore();
+    const [isVisible, setIsVisible] = useState(false);
 
-    // Always render but hide if less than 2 nodes selected
-    const isVisible = selectedNodes.length >= 2;
+    // Use a debounced visibility check to prevent flicker
+    useEffect(() => {
+        const shouldBeVisible = selectedNodes.length >= 2;
+
+        if (shouldBeVisible && !isVisible) {
+            // Show immediately when going from hidden to visible
+            setIsVisible(true);
+        } else if (!shouldBeVisible && isVisible) {
+            // Delay hiding to prevent flicker
+            const timer = setTimeout(() => {
+                setIsVisible(selectedNodes.length >= 2);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedNodes.length, isVisible]);
 
     const alignHorizontal = () => {
         const nodes = getNodes();

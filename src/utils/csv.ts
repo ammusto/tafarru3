@@ -2,6 +2,7 @@ import Papa from 'papaparse';
 import { Node, Edge } from 'reactflow';
 import { NodeData, EdgeData, CSVRow } from '../types';
 import { formatNodeLabel } from './nameFormatter';
+import dagre from 'dagre';
 
 export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: Edge<EdgeData>[] }> => {
     return new Promise((resolve, reject) => {
@@ -74,7 +75,7 @@ export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: 
                                     label: row.LineLabel,
                                     lineStyle: (row.LineStyle as 'solid' | 'dashed' | 'dotted') || 'solid',
                                     lineWidth: parseInt(row.LineWidth || '2'),
-                                    lineColor: row.LineColor || 'gray',
+                                    lineColor: row.LineColor || '#b1b1b7',
                                     arrowStyle: (row.ArrowStyle as 'none' | 'start' | 'end' | 'both') || 'end',
                                     curveStyle: 'straight'
                                 };
@@ -104,7 +105,7 @@ export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: 
                                         label: labels[connIndex],
                                         lineStyle: (lineStyle as 'solid' | 'dashed' | 'dotted') || 'solid',
                                         lineWidth: 2,
-                                        lineColor: lineColor || 'gray',
+                                        lineColor: lineColor || '#b1b1b7',
                                         arrowStyle: arrowConfig?.replace('arrow-', '') as any || 'end',
                                         curveStyle: 'straight'
                                     };
@@ -139,71 +140,55 @@ export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: 
 };
 
 const applyHierarchicalLayout = (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]) => {
-    // Simple hierarchical layout
-    const nodeMap = new Map(nodes.map(n => [n.id, n]));
-    const childrenMap = new Map<string, string[]>();
-    const rootNodes: string[] = [];
+    // Create a new dagre graph
+    const dagreGraph = new dagre.graphlib.Graph();
+    dagreGraph.setDefaultEdgeLabel(() => ({}));
+    dagreGraph.setGraph({ rankdir: 'TB', nodesep: 50, ranksep: 75 });
 
-    // Build parent-child relationships
-    edges.forEach(edge => {
-        if (!childrenMap.has(edge.source)) {
-            childrenMap.set(edge.source, []);
-        }
-        childrenMap.get(edge.source)!.push(edge.target);
-    });
-
-    // Find root nodes
-    nodes.forEach(node => {
-        const hasParent = edges.some(edge => edge.target === node.id);
-        if (!hasParent) {
-            rootNodes.push(node.id);
-        }
-    });
-
-    // Layout function
-    const layoutNode = (nodeId: string, x: number, y: number, levelWidth: number): number => {
-        const node = nodeMap.get(nodeId);
-        if (!node) return 0;
-
-        node.position = { x, y };
-
-        const children = childrenMap.get(nodeId) || [];
-        if (children.length === 0) return 150; // node width
-
-        let childX = x - (levelWidth * (children.length - 1)) / 2;
-        let maxChildWidth = 0;
-
-        children.forEach(childId => {
-            const childWidth = layoutNode(childId, childX, y + 100, levelWidth / children.length);
-            maxChildWidth = Math.max(maxChildWidth, childWidth);
-            childX += levelWidth / children.length;
+    // Add nodes to dagre
+    nodes.forEach((node) => {
+        dagreGraph.setNode(node.id, {
+            width: node.data.width || 150,
+            height: node.data.height || 50
         });
+    });
 
-        return Math.max(150, levelWidth);
-    };
+    // Add edges to dagre
+    edges.forEach((edge) => {
+        dagreGraph.setEdge(edge.source, edge.target);
+    });
 
-    // Apply layout to each root
-    let rootX = 0;
-    rootNodes.forEach(rootId => {
-        const width = layoutNode(rootId, rootX, 50, 800);
-        rootX += width + 100;
+    // Calculate the layout
+    dagre.layout(dagreGraph);
+
+    // Apply the layout
+    nodes.forEach((node) => {
+        const nodeWithPosition = dagreGraph.node(node.id);
+        node.position = {
+            x: nodeWithPosition.x - (node.data.width || 150) / 2,
+            y: nodeWithPosition.y - (node.data.height || 50) / 2,
+        };
     });
 };
 
 export const generateCSV = (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]): string => {
     const rows: CSVRow[] = nodes.map(node => {
-        // Find parent edge
-        const parentEdge = edges.find(e => e.target === node.id && e.id.startsWith('e') && !e.id.includes('-', 2));
+        // Find parent edge - look for edges targeting this node
+        const parentEdge = edges.find(e =>
+            e.target === node.id &&
+            e.sourceHandle === 'bottom' &&
+            e.targetHandle === 'top'
+        );
 
-        // Find additional connections
+        // Find additional connections - edges from this node that aren't the hierarchical ones
         const additionalEdges = edges.filter(e =>
             e.source === node.id &&
-            (!parentEdge || e.id !== parentEdge.id)
+            !(e.sourceHandle === 'bottom' && e.targetHandle === 'top')
         );
 
         const connections = additionalEdges.map(e => e.target).join(',');
         const connectionStyles = additionalEdges.map(e =>
-            `${e.data?.lineStyle || 'solid'};${e.data?.lineColor || 'gray'};arrow-${e.data?.arrowStyle || 'end'}`
+            `${e.data?.lineStyle || 'solid'};${e.data?.lineColor || '#b1b1b7'};arrow-${e.data?.arrowStyle || 'end'}`
         ).join(',');
         const connectionLabels = additionalEdges.map(e => e.data?.label || '').join(',');
 
@@ -260,7 +245,7 @@ export const generateTemplateCSV = (): string => {
         BorderColor: 'black',
         LineStyle: 'solid',
         LineWidth: '2',
-        LineColor: 'gray',
+        LineColor: '#b1b1b7',
         ArrowStyle: 'end',
         LineLabel: '',
         X: '',

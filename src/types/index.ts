@@ -29,6 +29,8 @@ export interface EdgeData {
     lineColor: string;
     arrowStyle: 'none' | 'start' | 'end' | 'both';
     curveStyle: 'straight' | 'curve' | 'elbow';
+    controlPointX?: number;
+    controlPointY?: number;
 }
 
 export interface CSVRow {

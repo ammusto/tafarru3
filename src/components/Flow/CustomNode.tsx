@@ -5,23 +5,30 @@ import { formatNodeLabel } from '../../utils/nameFormatter';
 import { useFlowStore } from '../../store/useFlowStore';
 
 const handlePositions = [
-    { id: 'top', position: Position.Top, style: { left: '50%' } },
-    { id: 'right', position: Position.Right, style: { top: '50%' } },
-    { id: 'bottom', position: Position.Bottom, style: { left: '50%' } },
-    { id: 'left', position: Position.Left, style: { top: '50%' } },
+    { id: 'top', position: Position.Top, style: { left: '50%', top: '-5px' } },
+    { id: 'right', position: Position.Right, style: { top: '50%', right: '-5px' } },
+    { id: 'bottom', position: Position.Bottom, style: { left: '50%', bottom: '-5px' } },
+    { id: 'left', position: Position.Left, style: { top: '50%', left: '-5px' } },
 ];
 
 export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => {
     const { getNode, setNodes } = useReactFlow();
-    const updateNode = useFlowStore(state => state.updateNode);
+    const { updateNode, gridEnabled } = useFlowStore();
     const textRef = useRef<HTMLDivElement>(null);
     const [isResizing, setIsResizing] = useState(false);
     const [dimensions, setDimensions] = useState({
         width: data.width || undefined,
         height: data.height || undefined
     });
+    const resizeRef = useRef({ startX: 0, startY: 0, startWidth: 0, startHeight: 0, startPosX: 0, startPosY: 0 });
 
     const label = formatNodeLabel(data);
+
+    // Snap to grid helper
+    const snapToGrid = useCallback((value: number) => {
+        if (!gridEnabled) return value;
+        return Math.round(value / 10) * 10;
+    }, [gridEnabled]);
 
     // Auto-size on mount if no explicit dimensions
     useEffect(() => {
@@ -43,46 +50,79 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
         const node = getNode(id);
         if (!node) return;
 
-        const startX = event.clientX;
-        const startY = event.clientY;
-        const startWidth = dimensions.width || 150;
-        const startHeight = dimensions.height || 50;
-        const startPosX = node.position.x;
-        const startPosY = node.position.y;
+        // Store initial values
+        resizeRef.current = {
+            startX: event.clientX,
+            startY: event.clientY,
+            startWidth: dimensions.width || 150,
+            startHeight: dimensions.height || 50,
+            startPosX: node.position.x,
+            startPosY: node.position.y
+        };
 
         const handleMouseMove = (e: MouseEvent) => {
-            const deltaX = e.clientX - startX;
-            const deltaY = e.clientY - startY;
+            const deltaX = e.clientX - resizeRef.current.startX;
+            const deltaY = e.clientY - resizeRef.current.startY;
 
-            let newWidth = startWidth;
-            let newHeight = startHeight;
-            let newX = startPosX;
-            let newY = startPosY;
+            let newWidth = resizeRef.current.startWidth;
+            let newHeight = resizeRef.current.startHeight;
+            let newX = resizeRef.current.startPosX;
+            let newY = resizeRef.current.startPosY;
 
+            // Calculate raw dimensions
             if (corner.includes('right')) {
-                newWidth = Math.max(50, startWidth + deltaX);
+                newWidth = resizeRef.current.startWidth + deltaX;
             }
             if (corner.includes('left')) {
-                newWidth = Math.max(50, startWidth - deltaX);
-                newX = startPosX + deltaX;
+                const rawWidth = resizeRef.current.startWidth - deltaX;
+                if (rawWidth >= 50) {
+                    newWidth = rawWidth;
+                    newX = resizeRef.current.startPosX + deltaX;
+                }
             }
             if (corner.includes('bottom')) {
-                newHeight = Math.max(30, startHeight + deltaY);
+                newHeight = resizeRef.current.startHeight + deltaY;
             }
             if (corner.includes('top')) {
-                newHeight = Math.max(30, startHeight - deltaY);
-                newY = startPosY + deltaY;
+                const rawHeight = resizeRef.current.startHeight - deltaY;
+                if (rawHeight >= 30) {
+                    newHeight = rawHeight;
+                    newY = resizeRef.current.startPosY + deltaY;
+                }
             }
 
-            setDimensions({ width: newWidth, height: newHeight });
-            updateNode(id, { width: newWidth, height: newHeight });
+            // Apply minimum constraints first
+            newWidth = Math.max(50, newWidth);
+            newHeight = Math.max(30, newHeight);
 
-            // Update position if resizing from left or top
-            if (corner.includes('left') || corner.includes('top')) {
-                setNodes(nodes => nodes.map(n =>
-                    n.id === id ? { ...n, position: { x: newX, y: newY } } : n
-                ));
+            // Then snap to grid
+            const snappedWidth = snapToGrid(newWidth);
+            const snappedHeight = snapToGrid(newHeight);
+
+            // For position, calculate the delta from snapping
+            if (corner.includes('left') && newX !== resizeRef.current.startPosX) {
+                const widthDiff = snappedWidth - newWidth;
+                newX = snapToGrid(newX - widthDiff);
             }
+            if (corner.includes('top') && newY !== resizeRef.current.startPosY) {
+                const heightDiff = snappedHeight - newHeight;
+                newY = snapToGrid(newY - heightDiff);
+            }
+
+            // Update dimensions
+            setDimensions({ width: snappedWidth, height: snappedHeight });
+
+            // Batch updates
+            requestAnimationFrame(() => {
+                updateNode(id, { width: snappedWidth, height: snappedHeight });
+
+                if ((corner.includes('left') || corner.includes('top')) &&
+                    (newX !== node.position.x || newY !== node.position.y)) {
+                    setNodes(nodes => nodes.map(n =>
+                        n.id === id ? { ...n, position: { x: newX, y: newY } } : n
+                    ));
+                }
+            });
         };
 
         const handleMouseUp = () => {
@@ -93,7 +133,7 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
 
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
-    }, [id, dimensions, getNode, updateNode, setNodes]);
+    }, [id, dimensions, getNode, updateNode, setNodes, snapToGrid]);
 
     const nodeStyle: React.CSSProperties = {
         width: dimensions.width || 'auto',
@@ -126,6 +166,7 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
         display: '-webkit-box',
         WebkitLineClamp: Math.floor((dimensions.height || 50) / 20),
         WebkitBoxOrient: 'vertical',
+        pointerEvents: 'none',
     };
 
     return (
@@ -139,19 +180,19 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
                 {selected && (
                     <>
                         <div
-                            className="absolute w-3 h-3 bg-blue-500 -top-1.5 -left-1.5 cursor-nw-resize z-10"
+                            className="nodrag absolute w-3 h-3 bg-blue-500 -top-1.5 -left-1.5 cursor-nw-resize z-10"
                             onMouseDown={(e) => handleResize('top-left', e)}
                         />
                         <div
-                            className="absolute w-3 h-3 bg-blue-500 -top-1.5 -right-1.5 cursor-ne-resize z-10"
+                            className="nodrag absolute w-3 h-3 bg-blue-500 -top-1.5 -right-1.5 cursor-ne-resize z-10"
                             onMouseDown={(e) => handleResize('top-right', e)}
                         />
                         <div
-                            className="absolute w-3 h-3 bg-blue-500 -bottom-1.5 -left-1.5 cursor-sw-resize z-10"
+                            className="nodrag absolute w-3 h-3 bg-blue-500 -bottom-1.5 -left-1.5 cursor-sw-resize z-10"
                             onMouseDown={(e) => handleResize('bottom-left', e)}
                         />
                         <div
-                            className="absolute w-3 h-3 bg-blue-500 -bottom-1.5 -right-1.5 cursor-se-resize z-10"
+                            className="nodrag absolute w-3 h-3 bg-blue-500 -bottom-1.5 -right-1.5 cursor-se-resize z-10"
                             onMouseDown={(e) => handleResize('bottom-right', e)}
                         />
                     </>
