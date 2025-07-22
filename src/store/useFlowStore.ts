@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import { Node, Edge, Connection, EdgeChange, NodeChange, applyNodeChanges, applyEdgeChanges } from 'reactflow';
-import { temporal, TemporalState } from 'zundo';
+import { temporal } from 'zundo';
 import { immer } from 'zustand/middleware/immer';
+import { subscribeWithSelector } from 'zustand/middleware';
 import { NodeData, EdgeData, EditorMode } from '../types';
+import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
+import throttle from 'lodash/throttle';
 
 interface FlowState {
     // Flow state
@@ -16,6 +19,7 @@ interface FlowState {
     gridEnabled: boolean;
     projectName: string;
     unsavedChanges: boolean;
+    isInteracting: boolean; // ADD THIS
 
     // Actions
     setNodes: (nodes: Node<NodeData>[]) => void;
@@ -44,173 +48,250 @@ interface FlowState {
     toggleGrid: () => void;
     setProjectName: (name: string) => void;
     setUnsavedChanges: (value: boolean) => void;
+    setIsInteracting: (value: boolean) => void; // ADD THIS
 
     // Import/Export
     importData: (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]) => void;
     clearAll: () => void;
 }
 
+
 export const useFlowStore = create<FlowState>()(
-    temporal(
-        immer((set, get) => ({
-            // Initial state
-            nodes: [],
-            edges: [],
-            selectedNodes: [],
-            selectedEdges: [],
-            mode: 'select',
-            gridEnabled: true,
-            projectName: 'Untitled',
-            unsavedChanges: false,
+    subscribeWithSelector(
+        temporal(
+            immer((set, get) => ({
+                // Initial state
+                nodes: [],
+                edges: [],
+                selectedNodes: [],
+                selectedEdges: [],
+                mode: 'select',
+                gridEnabled: true,
+                projectName: 'Untitled',
+                unsavedChanges: false,
+                isInteracting: false,
 
-            // Flow actions
-            setNodes: (nodes) => set((state) => {
-                state.nodes = nodes;
-                state.unsavedChanges = true;
-            }),
 
-            setEdges: (edges) => set((state) => {
-                state.edges = edges;
-                state.unsavedChanges = true;
-            }),
+                // Flow actions
+                setNodes: (nodes) => set((state) => {
+                    state.nodes = nodes;
+                    state.unsavedChanges = true;
+                }),
 
-            onNodesChange: (changes) => set((state) => {
-                state.nodes = applyNodeChanges(changes, state.nodes);
-                state.unsavedChanges = true;
-            }),
+                setEdges: (edges) => set((state) => {
+                    state.edges = edges;
+                    state.unsavedChanges = true;
+                }),
 
-            onEdgesChange: (changes) => set((state) => {
-                state.edges = applyEdgeChanges(changes, state.edges);
-                state.unsavedChanges = true;
-            }),
+                onNodesChange: (changes) => set((state) => {
+                    const significantChange = changes.some(change =>
+                        change.type === 'remove' ||
+                        (change.type === 'position' && !state.isInteracting)
+                    );
 
-            onConnect: (connection) => set((state) => {
-                const newEdge: Edge<EdgeData> = {
-                    id: `e${connection.source}-${connection.target}`,
-                    source: connection.source!,
-                    target: connection.target!,
-                    sourceHandle: connection.sourceHandle || undefined,
-                    targetHandle: connection.targetHandle || undefined,
-                    type: 'custom',
-                    data: {
-                        lineStyle: 'solid',
-                        lineWidth: 2,
-                        lineColor: '#gray',
-                        arrowStyle: 'end',
-                        curveStyle: 'straight'
+                    state.nodes = applyNodeChanges(changes, state.nodes);
+
+                    if (significantChange) {
+                        state.unsavedChanges = true;
                     }
-                };
-                state.edges.push(newEdge);
-                state.unsavedChanges = true;
-            }),
+                }),
 
-            // Node actions
-            addNode: (node) => set((state) => {
-                state.nodes.push(node);
-                state.unsavedChanges = true;
-            }),
-
-            updateNode: (nodeId, data) => set((state) => {
-                const node = state.nodes.find(n => n.id === nodeId);
-                if (node) {
-                    node.data = { ...node.data, ...data };
+                onEdgesChange: (changes) => set((state) => {
+                    state.edges = applyEdgeChanges(changes, state.edges);
                     state.unsavedChanges = true;
-                }
-            }),
+                }),
 
-            deleteNodes: (nodeIds) => set((state) => {
-                state.nodes = state.nodes.filter(n => !nodeIds.includes(n.id));
-                state.edges = state.edges.filter(e =>
-                    !nodeIds.includes(e.source) && !nodeIds.includes(e.target)
-                );
-                state.unsavedChanges = true;
-            }),
-
-            // Edge actions
-            addEdge: (edge) => set((state) => {
-                state.edges.push(edge);
-                state.unsavedChanges = true;
-            }),
-
-            updateEdge: (edgeId, data) => set((state) => {
-                const edge = state.edges.find(e => e.id === edgeId);
-                if (edge) {
-                    edge.data = { ...edge.data, ...data };
+                onConnect: (connection) => set((state) => {
+                    const newEdge: Edge<EdgeData> = {
+                        id: `e${connection.source}-${connection.target}`,
+                        source: connection.source!,
+                        target: connection.target!,
+                        sourceHandle: connection.sourceHandle || undefined,
+                        targetHandle: connection.targetHandle || undefined,
+                        type: 'custom',
+                        data: {
+                            lineStyle: 'solid',
+                            lineWidth: 2,
+                            lineColor: '#gray',
+                            arrowStyle: 'end',
+                            curveStyle: 'straight'
+                        }
+                    };
+                    state.edges.push(newEdge);
                     state.unsavedChanges = true;
-                }
-            }),
+                }),
 
-            deleteEdges: (edgeIds) => set((state) => {
-                state.edges = state.edges.filter(e => !edgeIds.includes(e.id));
-                state.unsavedChanges = true;
-            }),
+                // Node actions
+                addNode: (node) => set((state) => {
+                    state.nodes.push(node);
+                    state.unsavedChanges = true;
+                }),
 
-            // Selection
-            setSelectedNodes: (nodeIds) => set((state) => {
-                state.selectedNodes = nodeIds;
-            }),
+                updateNode: (nodeId, data) => set((state) => {
+                    const node = state.nodes.find(n => n.id === nodeId);
+                    if (node) {
+                        node.data = { ...node.data, ...data };
+                        state.unsavedChanges = true;
+                    }
+                }),
 
-            setSelectedEdges: (edgeIds) => set((state) => {
-                state.selectedEdges = edgeIds;
-            }),
+                deleteNodes: (nodeIds) => set((state) => {
+                    state.nodes = state.nodes.filter(n => !nodeIds.includes(n.id));
+                    state.edges = state.edges.filter(e =>
+                        !nodeIds.includes(e.source) && !nodeIds.includes(e.target)
+                    );
+                    state.unsavedChanges = true;
+                }),
 
-            clearSelection: () => set((state) => {
-                state.selectedNodes = [];
-                state.selectedEdges = [];
-            }),
+                // Edge actions
+                addEdge: (edge) => set((state) => {
+                    state.edges.push(edge);
+                    state.unsavedChanges = true;
+                }),
 
-            // UI actions
-            setMode: (mode) => set((state) => {
-                state.mode = mode;
-            }),
+                updateEdge: (edgeId, data) => set((state) => {
+                    const edge = state.edges.find(e => e.id === edgeId);
+                    if (edge && edge.data) {
+                        // Ensure we have complete EdgeData by merging with defaults
+                        const currentData = edge.data;
+                        const newData: EdgeData = {
+                            lineStyle: data.lineStyle !== undefined ? data.lineStyle : currentData.lineStyle,
+                            lineWidth: data.lineWidth !== undefined ? data.lineWidth : currentData.lineWidth,
+                            lineColor: data.lineColor !== undefined ? data.lineColor : currentData.lineColor,
+                            arrowStyle: data.arrowStyle !== undefined ? data.arrowStyle : currentData.arrowStyle,
+                            curveStyle: data.curveStyle !== undefined ? data.curveStyle : currentData.curveStyle,
+                            label: data.label !== undefined ? data.label : currentData.label,
+                        };
+                        edge.data = newData;
+                        state.unsavedChanges = true;
+                    }
+                }),
 
-            toggleGrid: () => set((state) => {
-                state.gridEnabled = !state.gridEnabled;
-            }),
+                deleteEdges: (edgeIds) => set((state) => {
+                    state.edges = state.edges.filter(e => !edgeIds.includes(e.id));
+                    state.unsavedChanges = true;
+                }),
 
-            setProjectName: (name) => set((state) => {
-                state.projectName = name;
-            }),
+                // Selection
+                setSelectedNodes: (nodeIds) => set((state) => {
+                    state.selectedNodes = nodeIds;
+                }),
 
-            setUnsavedChanges: (value) => set((state) => {
-                state.unsavedChanges = value;
-            }),
+                setSelectedEdges: (edgeIds) => set((state) => {
+                    state.selectedEdges = edgeIds;
+                }),
 
-            // Import/Export
-            importData: (nodes, edges) => set((state) => {
-                state.nodes = nodes;
-                state.edges = edges;
-                state.unsavedChanges = false;
-                state.selectedNodes = [];
-                state.selectedEdges = [];
-            }),
+                clearSelection: () => set((state) => {
+                    state.selectedNodes = [];
+                    state.selectedEdges = [];
+                }),
 
-            clearAll: () => set((state) => {
-                state.nodes = [];
-                state.edges = [];
-                state.selectedNodes = [];
-                state.selectedEdges = [];
-                state.unsavedChanges = false;
-            })
-        })),
-        {
-            limit: 50,
-            partialize: (state) => ({
-                nodes: state.nodes,
-                edges: state.edges
-            })
-        }
+                // UI actions
+                setMode: (mode) => set((state) => {
+                    state.mode = mode;
+                }),
+
+                toggleGrid: () => set((state) => {
+                    state.gridEnabled = !state.gridEnabled;
+                }),
+
+                setProjectName: (name) => set((state) => {
+                    state.projectName = name;
+                }),
+
+                setUnsavedChanges: (value) => set((state) => {
+                    state.unsavedChanges = value;
+                }),
+
+                setIsInteracting: (value) => set((state) => { // ADD THIS
+                    state.isInteracting = value;
+                }),
+
+                // Import/Export
+                importData: (nodes, edges) => set((state) => {
+                    state.nodes = nodes;
+                    state.edges = edges;
+                    state.unsavedChanges = false;
+                    state.selectedNodes = [];
+                    state.selectedEdges = [];
+                }),
+
+                clearAll: () => set((state) => {
+                    state.nodes = [];
+                    state.edges = [];
+                    state.selectedNodes = [];
+                    state.selectedEdges = [];
+                    state.unsavedChanges = false;
+                })
+            })),
+            {
+                limit: 50,
+                partialize: (state) => ({
+                    nodes: state.nodes,
+                    edges: state.edges
+                }),
+                equality: (pastState, currentState) => {
+                    // Only track significant changes
+                    return JSON.stringify(pastState) === JSON.stringify(currentState);
+                },
+                handleSet: (handleSet) =>
+                    throttle<typeof handleSet>((state) => {
+                        // Only record if not interacting
+                        if (typeof state === 'object' && state !== null && 'isInteracting' in state && !(state as FlowState).isInteracting) {
+                            handleSet(state);
+                        }
+                    }, 1000)
+            }
+        )
     )
 );
 
-// Create a separate hook for temporal features
-export const useTemporalStore = <T extends (...args: any[]) => any>() => {
-    const store = useFlowStore as TemporalState<ReturnType<T>>;
+// Create a hook that properly accesses the temporal store
+export const useTemporalStore = () => {
+    // Use a ref to cache the temporal store reference
+    const temporalStoreRef = useRef((useFlowStore as any).temporal);
+    const temporalStore = temporalStoreRef.current;
+
+    // Create stable function references
+    const undo = useCallback(() => {
+        temporalStore.getState().undo();
+    }, [temporalStore]);
+
+    const redo = useCallback(() => {
+        temporalStore.getState().redo();
+    }, [temporalStore]);
+
+    const clear = useCallback(() => {
+        temporalStore.getState().clear();
+    }, [temporalStore]);
+
+    // Subscribe to temporal state with a stable selector
+    const temporalState = useMemo(() => {
+        const state = temporalStore.getState();
+        return {
+            canUndo: (state?.pastStates?.length || 0) > 0,
+            canRedo: (state?.futureStates?.length || 0) > 0,
+        };
+    }, [temporalStore]);
+
+    // Use a subscription for reactive updates
+    const [canUndo, setCanUndo] = useState(temporalState.canUndo);
+    const [canRedo, setCanRedo] = useState(temporalState.canRedo);
+
+    useEffect(() => {
+        const unsubscribe = temporalStore.subscribe((state: any) => {
+            setCanUndo((state?.pastStates?.length || 0) > 0);
+            setCanRedo((state?.futureStates?.length || 0) > 0);
+        });
+
+        return unsubscribe;
+    }, [temporalStore]);
+
     return {
-        undo: () => store.temporal.getState().undo(),
-        redo: () => store.temporal.getState().redo(),
-        clear: () => store.temporal.getState().clear(),
-        canUndo: store.temporal.getState().canUndo,
-        canRedo: store.temporal.getState().canRedo,
+        undo,
+        redo,
+        clear,
+        canUndo,
+        canRedo,
     };
 };

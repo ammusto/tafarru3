@@ -10,9 +10,10 @@ import { useFlowStore } from '../../store/useFlowStore';
 
 export function AlignmentBar() {
     const { getNodes, setNodes } = useReactFlow();
-    const selectedNodes = useFlowStore(state => state.selectedNodes);
+    const { selectedNodes, setUnsavedChanges } = useFlowStore();
 
-    if (selectedNodes.length < 2) return null;
+    // Always render but hide if less than 2 nodes selected
+    const isVisible = selectedNodes.length >= 2;
 
     const alignHorizontal = () => {
         const nodes = getNodes();
@@ -32,6 +33,7 @@ export function AlignmentBar() {
             }
             return node;
         }));
+        setUnsavedChanges(true);
     };
 
     const alignVertical = () => {
@@ -52,6 +54,7 @@ export function AlignmentBar() {
             }
             return node;
         }));
+        setUnsavedChanges(true);
     };
 
     const distributeHorizontal = () => {
@@ -78,6 +81,7 @@ export function AlignmentBar() {
             }
             return node;
         }));
+        setUnsavedChanges(true);
     };
 
     const distributeVertical = () => {
@@ -104,10 +108,14 @@ export function AlignmentBar() {
             }
             return node;
         }));
+        setUnsavedChanges(true);
     };
 
     return (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex gap-1 z-10">
+        <div
+            className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex gap-1 z-10 transition-all duration-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+                }`}
+        >
             <button
                 onClick={alignHorizontal}
                 className="p-2 hover:bg-gray-100 rounded-md transition-colors"
@@ -126,6 +134,7 @@ export function AlignmentBar() {
                 onClick={distributeHorizontal}
                 className="p-2 hover:bg-gray-100 rounded-md transition-colors"
                 title="Distribute horizontally"
+                disabled={selectedNodes.length < 3}
             >
                 <AlignHorizontalDistributeCenter size={20} />
             </button>
@@ -133,6 +142,7 @@ export function AlignmentBar() {
                 onClick={distributeVertical}
                 className="p-2 hover:bg-gray-100 rounded-md transition-colors"
                 title="Distribute vertically"
+                disabled={selectedNodes.length < 3}
             >
                 <AlignVerticalDistributeCenter size={20} />
             </button>

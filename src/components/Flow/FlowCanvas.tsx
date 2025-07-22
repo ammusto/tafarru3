@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import ReactFlow, {
     Background,
     Controls,
@@ -8,6 +8,8 @@ import ReactFlow, {
     ConnectionMode,
     NodeMouseHandler,
     SelectionMode,
+    Connection,
+    OnConnectStartParams,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowStore } from '../../store/useFlowStore';
@@ -26,6 +28,10 @@ const edgeTypes = {
 export function FlowCanvas() {
     const reactFlowInstance = useReactFlow();
     const canvasRef = useRef<HTMLDivElement>(null);
+    const { setIsInteracting } = useFlowStore();
+
+    const [connectStartParams, setConnectStartParams] = useState<OnConnectStartParams | null>(null);
+
 
     const {
         nodes,
@@ -42,6 +48,13 @@ export function FlowCanvas() {
         setMode,
     } = useFlowStore();
 
+    const onConnectStart = useCallback((event: React.MouseEvent | React.TouchEvent, params: OnConnectStartParams) => {
+        setConnectStartParams(params);
+    }, []);
+
+    const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
+        setConnectStartParams(null);
+    }, []);
     // Handle canvas click based on mode
     const handleCanvasClick = useCallback((event: React.MouseEvent) => {
         if (mode === 'node') {
@@ -125,6 +138,14 @@ export function FlowCanvas() {
                 onEdgeClick={handleEdgeClick}
                 onPaneClick={handlePaneClick}
                 onSelectionChange={handleSelectionChange}
+                onConnectStart={onConnectStart}
+                onConnectEnd={onConnectEnd}
+                onNodeDragStart={() => setIsInteracting(true)}
+                onNodeDragStop={() => setIsInteracting(false)}
+                onSelectionDragStart={() => setIsInteracting(true)}
+                onSelectionDragStop={() => setIsInteracting(false)}
+                edgesUpdatable={true}
+                edgesFocusable={true}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 connectionMode={ConnectionMode.Loose}

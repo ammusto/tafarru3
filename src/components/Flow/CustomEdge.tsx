@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { EdgeProps, getSmoothStepPath, getStraightPath, getBezierPath } from 'reactflow';
+import { EdgeProps, getSmoothStepPath, getStraightPath, getBezierPath, EdgeLabelRenderer, BaseEdge } from 'reactflow';
 import { EdgeData } from '../../types';
 
 export const CustomEdge = memo(({
@@ -14,6 +14,8 @@ export const CustomEdge = memo(({
     selected,
     markerEnd,
     markerStart,
+    style,
+    interactionWidth = 20,
 }: EdgeProps<EdgeData>) => {
     const [edgePath, labelX, labelY] = useMemo(() => {
         if (data?.curveStyle === 'elbow') {
@@ -65,6 +67,11 @@ export const CustomEdge = memo(({
         return undefined;
     }, [data?.arrowStyle, id]);
 
+    // Show bezier handle for curved edges when selected
+    const showHandle = selected && data?.curveStyle === 'curve';
+    const handleX = (sourceX + targetX) / 2;
+    const handleY = (sourceY + targetY) / 2;
+
     return (
         <>
             <defs>
@@ -101,6 +108,18 @@ export const CustomEdge = memo(({
                     </marker>
                 )}
             </defs>
+
+            {/* Invisible wider path for easier interaction */}
+            <path
+                className="react-flow__edge-interaction"
+                d={edgePath}
+                strokeWidth={interactionWidth}
+                stroke="transparent"
+                fill="none"
+                style={{ cursor: 'pointer' }}
+            />
+
+            {/* Visible path */}
             <path
                 id={id}
                 className="react-flow__edge-path"
@@ -111,18 +130,43 @@ export const CustomEdge = memo(({
                 fill="none"
                 markerEnd={customMarkerEnd}
                 markerStart={customMarkerStart}
+                style={style}
             />
+
+            {/* Edge label */}
             {data?.label && (
-                <text>
-                    <textPath
-                        href={`#${id}`}
-                        style={{ fontSize: 12, fill: '#666' }}
-                        startOffset="50%"
-                        textAnchor="middle"
+                <EdgeLabelRenderer>
+                    <div
+                        style={{
+                            position: 'absolute',
+                            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+                            fontSize: 12,
+                            background: 'white',
+                            padding: '2px 4px',
+                            borderRadius: 3,
+                            pointerEvents: 'all',
+                        }}
+                        className="nodrag nopan"
                     >
                         {data.label}
-                    </textPath>
-                </text>
+                    </div>
+                </EdgeLabelRenderer>
+            )}
+
+            {/* Bezier control handle */}
+            {showHandle && (
+                <g>
+                    <circle
+                        cx={handleX}
+                        cy={handleY}
+                        r={8}
+                        fill="#ff0073"
+                        stroke="white"
+                        strokeWidth={2}
+                        style={{ cursor: 'move' }}
+                        className="react-flow__edge-control-point"
+                    />
+                </g>
             )}
         </>
     );
