@@ -150,22 +150,35 @@ export const useFlowStore = create<FlowState>()(
                 }),
 
                 updateEdge: (edgeId, data) => set((state) => {
-                    const edge = state.edges.find(e => e.id === edgeId);
-                    if (edge && edge.data) {
-                        // Ensure we have complete EdgeData by merging with defaults
-                        const currentData = edge.data;
-                        const newData: EdgeData = {
-                            lineStyle: data.lineStyle !== undefined ? data.lineStyle : currentData.lineStyle,
-                            lineWidth: data.lineWidth !== undefined ? data.lineWidth : currentData.lineWidth,
-                            lineColor: data.lineColor !== undefined ? data.lineColor : currentData.lineColor,
-                            arrowStyle: data.arrowStyle !== undefined ? data.arrowStyle : currentData.arrowStyle,
-                            curveStyle: data.curveStyle !== undefined ? data.curveStyle : currentData.curveStyle,
-                            label: data.label !== undefined ? data.label : currentData.label,
-                        };
-                        edge.data = newData;
-                        state.unsavedChanges = true;
-                    }
+                    const edgeIndex = state.edges.findIndex(e => e.id === edgeId);
+                    if (edgeIndex === -1) return;
+
+                    const prev = state.edges[edgeIndex];
+
+                    // Ensure prev.data exists before proceeding
+                    if (!prev.data) return;
+
+                    const current = prev.data;
+
+                    const merged: EdgeData = {
+                        lineStyle: data.lineStyle ?? current.lineStyle,
+                        lineWidth: data.lineWidth ?? current.lineWidth,
+                        lineColor: data.lineColor ?? current.lineColor,
+                        arrowStyle: data.arrowStyle ?? current.arrowStyle,
+                        curveStyle: data.curveStyle ?? current.curveStyle,
+                        label: data.label ?? current.label,
+                        controlPointX: 'controlPointX' in data ? data.controlPointX! : current.controlPointX,
+                        controlPointY: 'controlPointY' in data ? data.controlPointY! : current.controlPointY,
+                    };
+
+                    state.edges[edgeIndex] = {
+                        ...prev,
+                        data: merged,
+                    };
+                    state.unsavedChanges = true;
                 }),
+
+
 
                 deleteEdges: (edgeIds) => set((state) => {
                     state.edges = state.edges.filter(e => !edgeIds.includes(e.id));

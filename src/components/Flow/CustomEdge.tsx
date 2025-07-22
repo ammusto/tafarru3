@@ -1,7 +1,25 @@
 import React, { memo, useMemo, useState, useCallback } from 'react';
-import { EdgeProps, getSmoothStepPath, getStraightPath, getBezierPath, EdgeLabelRenderer, BaseEdge, useReactFlow } from 'reactflow';
+import {
+    EdgeProps,
+    getSmoothStepPath,
+    getStraightPath,
+    Position,
+    EdgeLabelRenderer,
+} from 'reactflow';
 import { EdgeData } from '../../types';
 import { useFlowStore } from '../../store/useFlowStore';
+
+const NODE_PADDING = 0;
+
+function applyPositionOffset(x: number, y: number, position: Position, offset: number): [number, number] {
+    switch (position) {
+        case Position.Top: return [x, y - offset];
+        case Position.Bottom: return [x, y + offset];
+        case Position.Left: return [x - offset, y];
+        case Position.Right: return [x + offset, y];
+        default: return [x, y];
+    }
+}
 
 export const CustomEdge = memo(({
     id,
@@ -13,58 +31,58 @@ export const CustomEdge = memo(({
     targetPosition,
     data,
     selected,
-    markerEnd,
-    markerStart,
     style,
     interactionWidth = 20,
 }: EdgeProps<EdgeData>) => {
     const { updateEdge } = useFlowStore();
     const [isDraggingHandle, setIsDraggingHandle] = useState(false);
 
-    // Round coordinates to avoid floating point issues
     const roundedSourceX = Math.round(sourceX);
     const roundedSourceY = Math.round(sourceY);
     const roundedTargetX = Math.round(targetX);
     const roundedTargetY = Math.round(targetY);
 
-    // Calculate control point for bezier curve
-    const [controlPointX, controlPointY] = useMemo(() => {
-        if (data?.curveStyle === 'curve') {
-            // If we have stored control point, use it
-            if (data.controlPointX !== undefined && data.controlPointY !== undefined) {
-                return [Math.round(data.controlPointX), Math.round(data.controlPointY)];
-            }
-            // Otherwise calculate default
-            return [Math.round((roundedSourceX + roundedTargetX) / 2), Math.round((roundedSourceY + roundedTargetY) / 2)];
-        }
-        return [Math.round((roundedSourceX + roundedTargetX) / 2), Math.round((roundedSourceY + roundedTargetY) / 2)];
-    }, [roundedSourceX, roundedSourceY, roundedTargetX, roundedTargetY, data?.curveStyle, data?.controlPointX, data?.controlPointY]);
+    const [edgePath, labelX, labelY, controlPointX, controlPointY] = useMemo(() => {
+        const [adjSourceX, adjSourceY] = applyPositionOffset(roundedSourceX, roundedSourceY, sourcePosition, NODE_PADDING);
+        const [adjTargetX, adjTargetY] = applyPositionOffset(roundedTargetX, roundedTargetY, targetPosition, NODE_PADDING);
 
-    const [edgePath, labelX, labelY] = useMemo(() => {
+        if (data?.curveStyle === 'curve') {
+            const cpX = data.controlPointX ?? Math.round((adjSourceX + adjTargetX) / 2);
+            const cpY = data.controlPointY ?? Math.round((adjSourceY + adjTargetY) / 2);
+            const path = `M ${adjSourceX},${adjSourceY} Q ${cpX},${cpY} ${adjTargetX},${adjTargetY}`;
+            return [path, Math.round((adjSourceX + adjTargetX) / 2), Math.round((adjSourceY + adjTargetY) / 2), cpX, cpY];
+        }
+
         if (data?.curveStyle === 'elbow') {
-            const result = getSmoothStepPath({
-                sourceX: roundedSourceX,
-                sourceY: roundedSourceY,
-                targetX: roundedTargetX,
-                targetY: roundedTargetY,
+            const [path, labelX, labelY] = getSmoothStepPath({
+                sourceX: adjSourceX,
+                sourceY: adjSourceY,
+                targetX: adjTargetX,
+                targetY: adjTargetY,
                 sourcePosition,
                 targetPosition,
             });
-            return [result[0], Math.round(result[1]), Math.round(result[2])];
-        } else if (data?.curveStyle === 'curve') {
-            // Use quadratic bezier with control point
-            const path = `M ${roundedSourceX},${roundedSourceY} Q ${controlPointX},${controlPointY} ${roundedTargetX},${roundedTargetY}`;
-            return [path, Math.round((roundedSourceX + roundedTargetX) / 2), Math.round((roundedSourceY + roundedTargetY) / 2)];
-        } else {
-            const result = getStraightPath({
-                sourceX: roundedSourceX,
-                sourceY: roundedSourceY,
-                targetX: roundedTargetX,
-                targetY: roundedTargetY,
-            });
-            return [result[0], Math.round(result[1]), Math.round(result[2])];
+            return [path, Math.round(labelX), Math.round(labelY), null, null];
         }
-    }, [roundedSourceX, roundedSourceY, roundedTargetX, roundedTargetY, sourcePosition, targetPosition, data?.curveStyle, controlPointX, controlPointY]);
+
+        const [path, labelX, labelY] = getStraightPath({
+            sourceX: adjSourceX,
+            sourceY: adjSourceY,
+            targetX: adjTargetX,
+            targetY: adjTargetY,
+        });
+        return [path, Math.round(labelX), Math.round(labelY), null, null];
+    }, [
+        data?.curveStyle,
+        data?.controlPointX,
+        data?.controlPointY,
+        roundedSourceX,
+        roundedSourceY,
+        roundedTargetX,
+        roundedTargetY,
+        sourcePosition,
+        targetPosition,
+    ]);
 
     const strokeDasharray = useMemo(() => {
         if (data?.lineStyle === 'dashed') return '5,5';
@@ -72,7 +90,6 @@ export const CustomEdge = memo(({
         return undefined;
     }, [data?.lineStyle]);
 
-    // Create custom markers based on arrow style
     const customMarkerEnd = useMemo(() => {
         if (data?.arrowStyle === 'end' || data?.arrowStyle === 'both') {
             return `url(#arrow-${id}-end)`;
@@ -87,28 +104,23 @@ export const CustomEdge = memo(({
         return undefined;
     }, [data?.arrowStyle, id]);
 
-    // Handle bezier control point dragging
     const handleControlPointDrag = useCallback((event: React.MouseEvent) => {
         event.stopPropagation();
         setIsDraggingHandle(true);
 
         const startX = event.clientX;
         const startY = event.clientY;
-        const startControlX = controlPointX;
-        const startControlY = controlPointY;
+        const startControlX = controlPointX!;
+        const startControlY = controlPointY!;
 
         const handleMouseMove = (e: MouseEvent) => {
             const deltaX = e.clientX - startX;
             const deltaY = e.clientY - startY;
 
-            const newControlX = Math.round(startControlX + deltaX);
-            const newControlY = Math.round(startControlY + deltaY);
-
-            // Update the edge data with new control point
             updateEdge(id, {
                 ...data,
-                controlPointX: newControlX,
-                controlPointY: newControlY,
+                controlPointX: Math.round(startControlX + deltaX),
+                controlPointY: Math.round(startControlY + deltaY),
             });
         };
 
@@ -122,7 +134,6 @@ export const CustomEdge = memo(({
         document.addEventListener('mouseup', handleMouseUp);
     }, [id, controlPointX, controlPointY, data, updateEdge]);
 
-    // Show bezier handle for curved edges when selected
     const showHandle = selected && data?.curveStyle === 'curve';
 
     return (
@@ -132,37 +143,30 @@ export const CustomEdge = memo(({
                     <marker
                         id={`arrow-${id}-end`}
                         viewBox="0 -5 10 10"
-                        refX="8"
+                        refX="10"
                         refY="0"
                         markerWidth="5"
                         markerHeight="5"
                         orient="auto"
                     >
-                        <path
-                            d="M0,-5L10,0L0,5"
-                            fill={data?.lineColor || '#b1b1b7'}
-                        />
+                        <path d="M0,-5L10,0L0,5" fill={data?.lineColor || '#b1b1b7'} />
                     </marker>
                 )}
                 {(data?.arrowStyle === 'start' || data?.arrowStyle === 'both') && (
                     <marker
                         id={`arrow-${id}-start`}
                         viewBox="0 -5 10 10"
-                        refX="2"
+                        refX="0"
                         refY="0"
                         markerWidth="5"
                         markerHeight="5"
                         orient="auto-start-reverse"
                     >
-                        <path
-                            d="M10,-5L0,0L10,5"
-                            fill={data?.lineColor || '#b1b1b7'}
-                        />
+                        <path d="M10,-5L0,0L10,5" fill={data?.lineColor || '#b1b1b7'} />
                     </marker>
                 )}
             </defs>
 
-            {/* Invisible wider path for easier interaction */}
             <path
                 className="react-flow__edge-interaction"
                 d={edgePath}
@@ -172,7 +176,6 @@ export const CustomEdge = memo(({
                 style={{ cursor: 'pointer' }}
             />
 
-            {/* Visible path */}
             <path
                 id={id}
                 className="react-flow__edge-path"
@@ -186,7 +189,6 @@ export const CustomEdge = memo(({
                 style={style}
             />
 
-            {/* Edge label */}
             {data?.label && (
                 <EdgeLabelRenderer>
                     <div
@@ -206,8 +208,7 @@ export const CustomEdge = memo(({
                 </EdgeLabelRenderer>
             )}
 
-            {/* Bezier control handle */}
-            {showHandle && (
+            {showHandle && controlPointX != null && controlPointY != null && (
                 <g>
                     <circle
                         cx={controlPointX}
@@ -216,9 +217,12 @@ export const CustomEdge = memo(({
                         fill="#ff0073"
                         stroke="white"
                         strokeWidth={2}
-                        style={{ cursor: isDraggingHandle ? 'grabbing' : 'grab' }}
-                        className="react-flow__edge-control-point nodrag nopan"
+                        className="react-flow__edge-control-point"
                         onMouseDown={handleControlPointDrag}
+                        style={{
+                            cursor: isDraggingHandle ? 'grabbing' : 'grab',
+                            pointerEvents: 'all', 
+                        }}
                     />
                 </g>
             )}

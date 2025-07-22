@@ -5,10 +5,10 @@ import { formatNodeLabel } from '../../utils/nameFormatter';
 import { useFlowStore } from '../../store/useFlowStore';
 
 const handlePositions = [
-    { id: 'top', position: Position.Top, style: { left: '50%', top: '-5px' } },
-    { id: 'right', position: Position.Right, style: { top: '50%', right: '-5px' } },
-    { id: 'bottom', position: Position.Bottom, style: { left: '50%', bottom: '-5px' } },
-    { id: 'left', position: Position.Left, style: { top: '50%', left: '-5px' } },
+    { id: 'top', position: Position.Top, style: { left: '50%', top: '0' } },
+    { id: 'right', position: Position.Right, style: { top: '50%', right: '0' } },
+    { id: 'bottom', position: Position.Bottom, style: { left: '50%', bottom: '0' } },
+    { id: 'left', position: Position.Left, style: { top: '50%', left: '0' } },
 ];
 
 export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => {
@@ -36,9 +36,11 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
             const textRect = textRef.current.getBoundingClientRect();
             const nodeWidth = Math.min(Math.max(textRect.width + 24, 100), 200);
             const nodeHeight = textRect.height + 16;
+            const snappedWidth = snapToGrid(nodeWidth);
+            const snappedHeight = snapToGrid(nodeHeight);
 
-            setDimensions({ width: nodeWidth, height: nodeHeight });
-            updateNode(id, { width: nodeWidth, height: nodeHeight });
+            setDimensions({ width: snappedWidth, height: snappedHeight });
+            updateNode(id, { width: snappedWidth, height: snappedHeight });
         }
     }, [id, data.width, updateNode]);
 
@@ -69,61 +71,55 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
             let newX = resizeRef.current.startPosX;
             let newY = resizeRef.current.startPosY;
 
-            // Calculate raw dimensions
+            // Raw dimension adjustment
             if (corner.includes('right')) {
                 newWidth = resizeRef.current.startWidth + deltaX;
             }
             if (corner.includes('left')) {
-                const rawWidth = resizeRef.current.startWidth - deltaX;
-                if (rawWidth >= 50) {
-                    newWidth = rawWidth;
-                    newX = resizeRef.current.startPosX + deltaX;
-                }
+                newWidth = resizeRef.current.startWidth - deltaX;
             }
             if (corner.includes('bottom')) {
                 newHeight = resizeRef.current.startHeight + deltaY;
             }
             if (corner.includes('top')) {
-                const rawHeight = resizeRef.current.startHeight - deltaY;
-                if (rawHeight >= 30) {
-                    newHeight = rawHeight;
-                    newY = resizeRef.current.startPosY + deltaY;
-                }
+                newHeight = resizeRef.current.startHeight - deltaY;
             }
 
-            // Apply minimum constraints first
+            // Apply min size constraint before snapping
             newWidth = Math.max(50, newWidth);
             newHeight = Math.max(30, newHeight);
 
-            // Then snap to grid
+            // Snap dimensions
             const snappedWidth = snapToGrid(newWidth);
             const snappedHeight = snapToGrid(newHeight);
 
-            // For position, calculate the delta from snapping
-            if (corner.includes('left') && newX !== resizeRef.current.startPosX) {
-                const widthDiff = snappedWidth - newWidth;
-                newX = snapToGrid(newX - widthDiff);
+            // Adjust position if resizing from top or left
+            const widthDelta = snappedWidth - resizeRef.current.startWidth;
+            const heightDelta = snappedHeight - resizeRef.current.startHeight;
+
+            if (corner.includes('left')) {
+                newX = snapToGrid(resizeRef.current.startPosX - widthDelta);
             }
-            if (corner.includes('top') && newY !== resizeRef.current.startPosY) {
-                const heightDiff = snappedHeight - newHeight;
-                newY = snapToGrid(newY - heightDiff);
+            if (corner.includes('top')) {
+                newY = snapToGrid(resizeRef.current.startPosY - heightDelta);
             }
 
-            // Update dimensions
+            // Apply updates
             setDimensions({ width: snappedWidth, height: snappedHeight });
 
-            // Batch updates
             requestAnimationFrame(() => {
                 updateNode(id, { width: snappedWidth, height: snappedHeight });
 
-                if ((corner.includes('left') || corner.includes('top')) &&
-                    (newX !== node.position.x || newY !== node.position.y)) {
-                    setNodes(nodes => nodes.map(n =>
-                        n.id === id ? { ...n, position: { x: newX, y: newY } } : n
-                    ));
+                if (corner.includes('left') || corner.includes('top')) {
+                    setNodes(nodes =>
+                        nodes.map(n =>
+                            n.id === id ? { ...n, position: { x: newX, y: newY } } : n
+                        )
+                    );
                 }
             });
         };
+
 
         const handleMouseUp = () => {
             setIsResizing(false);

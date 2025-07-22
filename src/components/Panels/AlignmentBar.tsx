@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
     AlignHorizontalJustifyCenter,
     AlignVerticalJustifyCenter,
@@ -10,118 +10,82 @@ import { useFlowStore } from '../../store/useFlowStore';
 
 export function AlignmentBar() {
     const { getNodes, setNodes } = useReactFlow();
-    const { selectedNodes, setUnsavedChanges } = useFlowStore();
-    const [isVisible, setIsVisible] = useState(false);
+    const { setUnsavedChanges } = useFlowStore();
+    const selectedNodes = getNodes().filter(n => n.selected);
 
-    // Use a debounced visibility check to prevent flicker
-    useEffect(() => {
-        const shouldBeVisible = selectedNodes.length >= 2;
 
-        if (shouldBeVisible && !isVisible) {
-            // Show immediately when going from hidden to visible
-            setIsVisible(true);
-        } else if (!shouldBeVisible && isVisible) {
-            // Delay hiding to prevent flicker
-            const timer = setTimeout(() => {
-                setIsVisible(selectedNodes.length >= 2);
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [selectedNodes.length, isVisible]);
+    const isVisible = selectedNodes.length >= 2;
+    const selectedSet = new Set(selectedNodes.map(n => n.id));
 
     const alignHorizontal = () => {
-        const nodes = getNodes();
-        const selectedSet = new Set(selectedNodes);
-        const selected = nodes.filter(n => selectedSet.has(n.id));
+        if (selectedNodes.length < 2) return;
 
-        if (selected.length < 2) return;
+        const avgY =
+            selectedNodes.reduce((sum, node) => sum + node.position.y, 0) /
+            selectedNodes.length;
 
-        const avgY = selected.reduce((sum, node) => sum + node.position.y, 0) / selected.length;
-
-        setNodes(nodes.map(node => {
-            if (selectedSet.has(node.id)) {
-                return {
-                    ...node,
-                    position: { ...node.position, y: avgY }
-                };
-            }
-            return node;
-        }));
+        setNodes(prev =>
+            prev.map(node =>
+                selectedSet.has(node.id)
+                    ? { ...node, position: { ...node.position, y: avgY } }
+                    : node
+            )
+        );
         setUnsavedChanges(true);
     };
 
     const alignVertical = () => {
-        const nodes = getNodes();
-        const selectedSet = new Set(selectedNodes);
-        const selected = nodes.filter(n => selectedSet.has(n.id));
+        if (selectedNodes.length < 2) return;
 
-        if (selected.length < 2) return;
+        const avgX =
+            selectedNodes.reduce((sum, node) => sum + node.position.x, 0) /
+            selectedNodes.length;
 
-        const avgX = selected.reduce((sum, node) => sum + node.position.x, 0) / selected.length;
-
-        setNodes(nodes.map(node => {
-            if (selectedSet.has(node.id)) {
-                return {
-                    ...node,
-                    position: { ...node.position, x: avgX }
-                };
-            }
-            return node;
-        }));
+        setNodes(prev =>
+            prev.map(node =>
+                selectedSet.has(node.id)
+                    ? { ...node, position: { ...node.position, x: avgX } }
+                    : node
+            )
+        );
         setUnsavedChanges(true);
     };
 
     const distributeHorizontal = () => {
-        const nodes = getNodes();
-        const selectedSet = new Set(selectedNodes);
-        const selected = nodes.filter(n => selectedSet.has(n.id));
+        if (selectedNodes.length < 3) return;
 
-        if (selected.length < 3) return;
+        const sorted = [...selectedNodes].sort((a, b) => a.position.x - b.position.x);
+        const leftX = sorted[0].position.x;
+        const rightX = sorted[sorted.length - 1].position.x;
+        const spacing = (rightX - leftX) / (sorted.length - 1);
 
-        // Sort by X position
-        selected.sort((a, b) => a.position.x - b.position.x);
-
-        const leftX = selected[0].position.x;
-        const rightX = selected[selected.length - 1].position.x;
-        const spacing = (rightX - leftX) / (selected.length - 1);
-
-        setNodes(nodes.map(node => {
-            const index = selected.findIndex(n => n.id === node.id);
-            if (index !== -1) {
-                return {
-                    ...node,
-                    position: { ...node.position, x: leftX + spacing * index }
-                };
-            }
-            return node;
-        }));
+        setNodes(prev =>
+            prev.map(node => {
+                const index = sorted.findIndex(n => n.id === node.id);
+                return index !== -1
+                    ? { ...node, position: { ...node.position, x: leftX + spacing * index } }
+                    : node;
+            })
+        );
         setUnsavedChanges(true);
     };
 
     const distributeVertical = () => {
-        const nodes = getNodes();
-        const selectedSet = new Set(selectedNodes);
-        const selected = nodes.filter(n => selectedSet.has(n.id));
+        if (selectedNodes.length < 3) return;
 
-        if (selected.length < 3) return;
+        const sorted = [...selectedNodes].sort((a, b) => a.position.y - b.position.y);
+        const topY = sorted[0].position.y;
+        const bottomY = sorted[sorted.length - 1].position.y;
+        const spacing = (bottomY - topY) / (sorted.length - 1);
 
-        // Sort by Y position
-        selected.sort((a, b) => a.position.y - b.position.y);
-
-        const topY = selected[0].position.y;
-        const bottomY = selected[selected.length - 1].position.y;
-        const spacing = (bottomY - topY) / (selected.length - 1);
-
-        setNodes(nodes.map(node => {
-            const index = selected.findIndex(n => n.id === node.id);
-            if (index !== -1) {
-                return {
-                    ...node,
-                    position: { ...node.position, y: topY + spacing * index }
-                };
-            }
-            return node;
-        }));
+        setNodes(prev =>
+            prev.map(node => {
+                const index = sorted.findIndex(n => n.id === node.id);
+                return index !== -1
+                    ? { ...node, position: { ...node.position, y: topY + spacing * index } }
+                    : node;
+            })
+        );
         setUnsavedChanges(true);
     };
 
