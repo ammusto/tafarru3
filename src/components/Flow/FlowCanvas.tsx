@@ -109,11 +109,13 @@ export function FlowCanvas() {
             position,
             data: {
                 label: 'New Node',
-                nodeShape: 'rectangle',
+                nodeShape: 'rounded',
                 nodeFillColor: 'white',
                 borderStyle: 'solid',
-                borderWidth: 2,
+                borderWidth: 1,
                 borderColor: 'black',
+                width: 120,
+                height: 40,
             } satisfies NodeData,
         };
 

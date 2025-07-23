@@ -267,8 +267,8 @@ export function NodeInspector() {
                             className="w-full px-2 py-1 border rounded"
                         >
                             <option value="none">None</option>
-                            <option value="start">Start</option>
-                            <option value="end">End</option>
+                            <option value="start">End</option>
+                            <option value="end">Start</option>
                             <option value="both">Both</option>
                         </select>
                     </div>

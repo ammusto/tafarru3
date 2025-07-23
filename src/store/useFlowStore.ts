@@ -100,23 +100,27 @@ export const useFlowStore = create<FlowState>()(
                     state.edges = applyEdgeChanges(changes, state.edges);
                     state.unsavedChanges = true;
                 }),
-
                 onConnect: (connection) => set((state) => {
+                    const source = connection.source!;
+                    const target = connection.target!;
+                    const id = `e${source}-${target}-${Date.now()}`;
+
                     const newEdge: Edge<EdgeData> = {
-                        id: `e${connection.source}-${connection.target}`,
-                        source: connection.source!,
-                        target: connection.target!,
+                        id,
+                        source,
+                        target,
                         sourceHandle: connection.sourceHandle || undefined,
                         targetHandle: connection.targetHandle || undefined,
                         type: 'custom',
                         data: {
                             lineStyle: 'solid',
                             lineWidth: 2,
-                            lineColor: '#gray',
-                            arrowStyle: 'end',
-                            curveStyle: 'straight'
-                        }
+                            lineColor: '#000000',
+                            arrowStyle: 'start',
+                            curveStyle: 'curve',
+                        },
                     };
+
                     state.edges.push(newEdge);
                     state.unsavedChanges = true;
                 }),
@@ -148,27 +152,28 @@ export const useFlowStore = create<FlowState>()(
                     state.edges.push(edge);
                     state.unsavedChanges = true;
                 }),
-
                 updateEdge: (edgeId, data) => set((state) => {
                     const edgeIndex = state.edges.findIndex(e => e.id === edgeId);
                     if (edgeIndex === -1) return;
 
                     const prev = state.edges[edgeIndex];
-
-                    // Ensure prev.data exists before proceeding
-                    if (!prev.data) return;
-
-                    const current = prev.data;
+                    const prevData: Partial<EdgeData> = prev.data || {};
 
                     const merged: EdgeData = {
-                        lineStyle: data.lineStyle ?? current.lineStyle,
-                        lineWidth: data.lineWidth ?? current.lineWidth,
-                        lineColor: data.lineColor ?? current.lineColor,
-                        arrowStyle: data.arrowStyle ?? current.arrowStyle,
-                        curveStyle: data.curveStyle ?? current.curveStyle,
-                        label: data.label ?? current.label,
-                        controlPointX: 'controlPointX' in data ? data.controlPointX! : current.controlPointX,
-                        controlPointY: 'controlPointY' in data ? data.controlPointY! : current.controlPointY,
+                        label: data.label ?? prevData.label ?? '',
+                        lineStyle: data.lineStyle ?? prevData.lineStyle ?? 'solid',
+                        lineWidth: data.lineWidth ?? prevData.lineWidth ?? 2,
+                        lineColor: data.lineColor ?? prevData.lineColor ?? '#000000',
+                        arrowStyle: data.arrowStyle ?? prevData.arrowStyle ?? 'none',
+                        curveStyle: data.curveStyle ?? prevData.curveStyle ?? 'straight',
+                        controlPointX:
+                            data.controlPointX !== undefined
+                                ? data.controlPointX
+                                : prevData.controlPointX ?? undefined,
+                        controlPointY:
+                            data.controlPointY !== undefined
+                                ? data.controlPointY
+                                : prevData.controlPointY ?? undefined,
                     };
 
                     state.edges[edgeIndex] = {
@@ -177,6 +182,9 @@ export const useFlowStore = create<FlowState>()(
                     };
                     state.unsavedChanges = true;
                 }),
+
+
+
 
 
 

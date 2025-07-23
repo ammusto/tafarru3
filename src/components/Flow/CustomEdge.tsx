@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState, useCallback } from 'react';
+import React, { memo, useMemo, useState, useCallback, useEffect } from 'react';
 import {
     EdgeProps,
     getSmoothStepPath,
@@ -9,7 +9,7 @@ import {
 import { EdgeData } from '../../types';
 import { useFlowStore } from '../../store/useFlowStore';
 
-const NODE_PADDING = 0;
+const NODE_PADDING = 1;
 
 function applyPositionOffset(x: number, y: number, position: Position, offset: number): [number, number] {
     switch (position) {
@@ -37,28 +37,30 @@ export const CustomEdge = memo(({
     const { updateEdge } = useFlowStore();
     const [isDraggingHandle, setIsDraggingHandle] = useState(false);
 
-    const roundedSourceX = Math.round(sourceX);
-    const roundedSourceY = Math.round(sourceY);
-    const roundedTargetX = Math.round(targetX);
-    const roundedTargetY = Math.round(targetY);
 
     const [edgePath, labelX, labelY, controlPointX, controlPointY] = useMemo(() => {
-        const [adjSourceX, adjSourceY] = applyPositionOffset(roundedSourceX, roundedSourceY, sourcePosition, NODE_PADDING);
-        const [adjTargetX, adjTargetY] = applyPositionOffset(roundedTargetX, roundedTargetY, targetPosition, NODE_PADDING);
+        const [adjSourceX, adjSourceY] = applyPositionOffset(sourceX, sourceY, sourcePosition, NODE_PADDING);
+        const [adjTargetX, adjTargetY] = applyPositionOffset(targetX, targetY, targetPosition, NODE_PADDING);
+
+        // force directionality: path must start at source and go to target
+        const fromX = adjSourceX;
+        const fromY = adjSourceY;
+        const toX = adjTargetX;
+        const toY = adjTargetY;
 
         if (data?.curveStyle === 'curve') {
-            const cpX = data.controlPointX ?? Math.round((adjSourceX + adjTargetX) / 2);
-            const cpY = data.controlPointY ?? Math.round((adjSourceY + adjTargetY) / 2);
-            const path = `M ${adjSourceX},${adjSourceY} Q ${cpX},${cpY} ${adjTargetX},${adjTargetY}`;
-            return [path, Math.round((adjSourceX + adjTargetX) / 2), Math.round((adjSourceY + adjTargetY) / 2), cpX, cpY];
+            const cpX = data.controlPointX ?? Math.round((fromX + toX) / 2);
+            const cpY = data.controlPointY ?? Math.round((fromY + toY) / 2);
+            const path = `M ${fromX},${fromY} Q ${cpX},${cpY} ${toX},${toY}`;
+            return [path, Math.round((fromX + toX) / 2), Math.round((fromY + toY) / 2), cpX, cpY];
         }
 
         if (data?.curveStyle === 'elbow') {
             const [path, labelX, labelY] = getSmoothStepPath({
-                sourceX: adjSourceX,
-                sourceY: adjSourceY,
-                targetX: adjTargetX,
-                targetY: adjTargetY,
+                sourceX: fromX,
+                sourceY: fromY,
+                targetX: toX,
+                targetY: toY,
                 sourcePosition,
                 targetPosition,
             });
@@ -66,23 +68,34 @@ export const CustomEdge = memo(({
         }
 
         const [path, labelX, labelY] = getStraightPath({
-            sourceX: adjSourceX,
-            sourceY: adjSourceY,
-            targetX: adjTargetX,
-            targetY: adjTargetY,
+            sourceX: fromX,
+            sourceY: fromY,
+            targetX: toX,
+            targetY: toY,
         });
         return [path, Math.round(labelX), Math.round(labelY), null, null];
     }, [
         data?.curveStyle,
         data?.controlPointX,
         data?.controlPointY,
-        roundedSourceX,
-        roundedSourceY,
-        roundedTargetX,
-        roundedTargetY,
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
         sourcePosition,
         targetPosition,
     ]);
+
+    useEffect(() => {
+        if (
+            data?.curveStyle === 'curve' &&
+            (data.controlPointX === undefined || data.controlPointY === undefined)
+        ) {
+            const cpX = Math.round((sourceX + targetX) / 2);
+            const cpY = Math.round((sourceY + targetY) / 2);
+            updateEdge(id, { controlPointX: cpX, controlPointY: cpY });
+        }
+    }, [id, data, sourceX, sourceY, targetX, targetY, updateEdge]);
 
     const strokeDasharray = useMemo(() => {
         if (data?.lineStyle === 'dashed') return '5,5';
@@ -90,16 +103,16 @@ export const CustomEdge = memo(({
         return undefined;
     }, [data?.lineStyle]);
 
-    const customMarkerEnd = useMemo(() => {
-        if (data?.arrowStyle === 'end' || data?.arrowStyle === 'both') {
-            return `url(#arrow-${id}-end)`;
-        }
-        return undefined;
-    }, [data?.arrowStyle, id]);
-
     const customMarkerStart = useMemo(() => {
         if (data?.arrowStyle === 'start' || data?.arrowStyle === 'both') {
             return `url(#arrow-${id}-start)`;
+
+        }
+        return undefined;
+    }, [data?.arrowStyle, id]);
+    const customMarkerEnd = useMemo(() => {
+        if (data?.arrowStyle === 'end' || data?.arrowStyle === 'both') {
+            return `url(#arrow-${id}-end)`;
         }
         return undefined;
     }, [data?.arrowStyle, id]);
@@ -139,32 +152,29 @@ export const CustomEdge = memo(({
     return (
         <>
             <defs>
-                {(data?.arrowStyle === 'end' || data?.arrowStyle === 'both') && (
-                    <marker
-                        id={`arrow-${id}-end`}
-                        viewBox="0 -5 10 10"
-                        refX="10"
-                        refY="0"
-                        markerWidth="5"
-                        markerHeight="5"
-                        orient="auto"
-                    >
-                        <path d="M0,-5L10,0L0,5" fill={data?.lineColor || '#b1b1b7'} />
-                    </marker>
-                )}
-                {(data?.arrowStyle === 'start' || data?.arrowStyle === 'both') && (
-                    <marker
-                        id={`arrow-${id}-start`}
-                        viewBox="0 -5 10 10"
-                        refX="0"
-                        refY="0"
-                        markerWidth="5"
-                        markerHeight="5"
-                        orient="auto-start-reverse"
-                    >
-                        <path d="M10,-5L0,0L10,5" fill={data?.lineColor || '#b1b1b7'} />
-                    </marker>
-                )}
+                <marker
+                    id={`arrow-${id}-start`}
+                    viewBox="0 0 10 10"
+                    refX="10"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                >
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill={data?.lineColor || '#b1b1b7'} />
+                </marker>
+
+                <marker
+                    id={`arrow-${id}-end`}
+                    viewBox="0 0 10 10"
+                    refX="10"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto"
+                >
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill={data?.lineColor || '#b1b1b7'} />
+                </marker>
             </defs>
 
             <path
@@ -221,7 +231,7 @@ export const CustomEdge = memo(({
                         onMouseDown={handleControlPointDrag}
                         style={{
                             cursor: isDraggingHandle ? 'grabbing' : 'grab',
-                            pointerEvents: 'all', 
+                            pointerEvents: 'all',
                         }}
                     />
                 </g>

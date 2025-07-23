@@ -58,8 +58,8 @@ export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: 
                                     id: `e${row.ParentID}-${row.ID}`,
                                     source: row.ParentID,
                                     target: row.ID,
-                                    sourceHandle: 'top',
-                                    targetHandle: 'bottom',
+                                    sourceHandle: 'bottom',  // Changed from 'top'
+                                    targetHandle: 'top',     // Changed from 'bottom'
                                     type: 'custom',
                                     data: {
                                         label: row.LineLabel,
@@ -115,19 +115,20 @@ export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: 
         reader.readAsText(file, 'UTF-8');
     });
 };
+
 export const generateCSV = (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]): string => {
     const rows: CSVRow[] = nodes.map(node => {
         // Find parent edge - look for edges targeting this node
         const parentEdge = edges.find(e =>
             e.target === node.id &&
-            e.sourceHandle === 'bottom' &&
-            e.targetHandle === 'top'
+            e.sourceHandle === 'bottom' &&  // Changed from 'bottom'
+            e.targetHandle === 'top'        // Changed from 'top'
         );
 
         // Find additional connections - edges from this node that aren't the hierarchical ones
         const additionalEdges = edges.filter(e =>
             e.source === node.id &&
-            !(e.sourceHandle === 'bottom' && e.targetHandle === 'top')
+            !(e.sourceHandle === 'bottom' && e.targetHandle === 'top')  // Updated condition
         );
 
         const connections = additionalEdges.map(e => e.target).join(',');
