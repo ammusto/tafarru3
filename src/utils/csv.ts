@@ -20,7 +20,7 @@ export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: 
                         const edges: Edge<EdgeData>[] = [];
                         const rows = results.data as CSVRow[];
 
-                        const needsAutoLayout = rows.every(row => !row.X || !row.Y);
+                        const needsAutoLayout = rows.some(row => !row.X || !row.Y);
 
                         rows.forEach((row, index) => {
                             const width = row.Width ? parseInt(row.Width) : undefined;
@@ -58,8 +58,8 @@ export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: 
                                     id: `e${row.ParentID}-${row.ID}`,
                                     source: row.ParentID,
                                     target: row.ID,
-                                    sourceHandle: 'bottom',  // Changed from 'top'
-                                    targetHandle: 'top',     // Changed from 'bottom'
+                                    sourceHandle: 'bottom',
+                                    targetHandle: 'top',
                                     type: 'custom',
                                     data: {
                                         label: row.LineLabel,
@@ -121,8 +121,8 @@ export const generateCSV = (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]): s
         // Find parent edge - look for edges targeting this node
         const parentEdge = edges.find(e =>
             e.target === node.id &&
-            e.sourceHandle === 'bottom' &&  // Changed from 'bottom'
-            e.targetHandle === 'top'        // Changed from 'top'
+            e.sourceHandle === 'bottom' &&
+            e.targetHandle === 'top'
         );
 
         // Find additional connections - edges from this node that aren't the hierarchical ones
@@ -179,10 +179,10 @@ export const generateTemplateCSV = (): string => {
         Label: '',
         DeathDate: 'd. 123/456',
         Kunya: 'Abū Bakr',
-        Nasab: 'ibn ʿAbd Allāh',
+        Nasab: 'b. ʿAbd Allāh',
         Nisba: 'al-Baghdādī',
         Shuhra: 'al-Ṣiddīq',
-        Biography: 'A notable scholar with expertise in ḥadīth',
+        Biography: '',
         NodeShape: 'rectangle',
         NodeFillColor: 'white',
         BorderStyle: 'solid',
