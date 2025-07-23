@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { useFlowStore, useTemporalStore } from '../store/useFlowStore';
+import { useReactFlow } from 'reactflow';
 
 export function useKeyboardShortcuts() {
+    const { getNodes, getEdges } = useReactFlow();
     const {
         mode,
         setMode,
-        selectedNodes,
-        selectedEdges,
         deleteNodes,
         deleteEdges
     } = useFlowStore();
@@ -35,6 +35,10 @@ export function useKeyboardShortcuts() {
                     case 'delete':
                     case 'backspace':
                         event.preventDefault();
+                        // Get currently selected nodes from ReactFlow
+                        const selectedNodes = getNodes().filter(n => n.selected).map(n => n.id);
+                        const selectedEdges = getEdges().filter(e => e.selected).map(e => e.id);
+
                         if (selectedNodes.length > 0) {
                             deleteNodes(selectedNodes);
                         }
@@ -67,5 +71,5 @@ export function useKeyboardShortcuts() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [mode, setMode, selectedNodes, selectedEdges, deleteNodes, deleteEdges, undo, redo]);
+    }, [mode, setMode, deleteNodes, deleteEdges, undo, redo, getNodes, getEdges]);
 }

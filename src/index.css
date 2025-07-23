@@ -68,3 +68,20 @@ body {
   stroke: #e5e7eb;
 }
 
+.react-flow__renderer.node-mode,
+.react-flow__renderer.node-mode * {
+  cursor: crosshair !important;
+}
+
+.react-flow__edge-control-point {
+  z-index: 1001 !important;
+  position: relative;
+}
+
+.react-flow__edges {
+  z-index: 4 !important;
+}
+
+.react-flow__edge.selected {
+  z-index: 1000 !important;
+}

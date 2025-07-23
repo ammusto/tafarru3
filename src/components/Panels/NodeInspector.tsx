@@ -219,7 +219,8 @@ export function NodeInspector() {
                             className="w-full px-2 py-1 border rounded"
                         >
                             <option value="straight">Straight</option>
-                            <option value="curve">Curved</option>
+                            <option value="curve">Curved (Auto)</option>
+                            <option value="bezier">Bezier (Manual)</option>
                             <option value="elbow">Elbow</option>
                         </select>
                     </div>

@@ -4,6 +4,7 @@ import {
     getSmoothStepPath,
     getStraightPath,
     Position,
+    getBezierPath,
     EdgeLabelRenderer,
 } from 'reactflow';
 import { EdgeData } from '../../types';
@@ -46,26 +47,79 @@ export const CustomEdge = memo(({
         const [adjSourceX, adjSourceY] = applyPositionOffset(roundedSourceX, roundedSourceY, sourcePosition, NODE_PADDING);
         const [adjTargetX, adjTargetY] = applyPositionOffset(roundedTargetX, roundedTargetY, targetPosition, NODE_PADDING);
 
-        if (data?.curveStyle === 'curve') {
-            // Calculate default control points for a nice S-curve
+        if (data?.curveStyle === 'bezier') {
+            // Manual bezier with two draggable handles
             const midX = (adjSourceX + adjTargetX) / 2;
             const midY = (adjSourceY + adjTargetY) / 2;
 
-            // Calculate offset based on the direction
             const dx = adjTargetX - adjSourceX;
             const dy = adjTargetY - adjSourceY;
             const distance = Math.sqrt(dx * dx + dy * dy);
             const offset = Math.min(100, distance * 0.3);
 
-            // Default control points create an S-curve
             const cp1X = data.controlPoint1X ?? Math.round(adjSourceX + dx * 0.25 + (dy / distance) * offset);
             const cp1Y = data.controlPoint1Y ?? Math.round(adjSourceY + dy * 0.25 - (dx / distance) * offset);
             const cp2X = data.controlPoint2X ?? Math.round(adjTargetX - dx * 0.25 - (dy / distance) * offset);
             const cp2Y = data.controlPoint2Y ?? Math.round(adjTargetY - dy * 0.25 + (dx / distance) * offset);
 
-            // Use cubic bezier curve (C command)
             const path = `M ${adjSourceX},${adjSourceY} C ${cp1X},${cp1Y} ${cp2X},${cp2Y} ${adjTargetX},${adjTargetY}`;
             return [path, Math.round(midX), Math.round(midY), cp1X, cp1Y, cp2X, cp2Y];
+        }
+
+        if (data?.curveStyle === 'curve') {
+            // Check if nodes are on same side and vertically/horizontally aligned
+            const isSameSide = sourcePosition === targetPosition;
+            const isVerticallyAligned = Math.abs(adjSourceX - adjTargetX) < 10;
+            const isHorizontallyAligned = Math.abs(adjSourceY - adjTargetY) < 10;
+
+            if (isSameSide && (isVerticallyAligned || isHorizontallyAligned)) {
+                // Create custom curve for same-side connections
+                const dx = adjTargetX - adjSourceX;
+                const dy = adjTargetY - adjSourceY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                let offset = Math.min(50, distance * 0.5);
+
+                // Determine offset direction based on which side we're on
+                let offsetX = 0, offsetY = 0;
+                switch (sourcePosition) {
+                    case Position.Left:
+                        offsetX = -offset;
+                        break;
+                    case Position.Right:
+                        offsetX = offset;
+                        break;
+                    case Position.Top:
+                        offsetY = -offset;
+                        break;
+                    case Position.Bottom:
+                        offsetY = offset;
+                        break;
+                }
+
+                // Create control points that bow out from the edge
+                const cp1X = adjSourceX + offsetX;
+                const cp1Y = adjSourceY + (dy * 0.25);
+                const cp2X = adjTargetX + offsetX;
+                const cp2Y = adjTargetY - (dy * 0.25);
+
+                const path = `M ${adjSourceX},${adjSourceY} C ${cp1X},${cp1Y} ${cp2X},${cp2Y} ${adjTargetX},${adjTargetY}`;
+                const labelX = Math.round((adjSourceX + adjTargetX) / 2 + offsetX * 0.5);
+                const labelY = Math.round((adjSourceY + adjTargetY) / 2);
+
+                return [path, labelX, labelY, null, null, null, null];
+            } else {
+                // Use ReactFlow's default bezier curve for normal connections
+                const [path, labelX, labelY] = getBezierPath({
+                    sourceX: adjSourceX,
+                    sourceY: adjSourceY,
+                    targetX: adjTargetX,
+                    targetY: adjTargetY,
+                    sourcePosition,
+                    targetPosition,
+                });
+                return [path, Math.round(labelX), Math.round(labelY), null, null, null, null];
+            }
         }
 
         if (data?.curveStyle === 'elbow') {
@@ -80,6 +134,7 @@ export const CustomEdge = memo(({
             return [path, Math.round(labelX), Math.round(labelY), null, null, null, null];
         }
 
+        // Default straight line
         const [path, labelX, labelY] = getStraightPath({
             sourceX: adjSourceX,
             sourceY: adjSourceY,
@@ -159,7 +214,7 @@ export const CustomEdge = memo(({
         return undefined;
     }, [data?.arrowStyle, id]);
 
-    const showHandles = selected && data?.curveStyle === 'curve';
+    const showHandles = selected && data?.curveStyle === 'bezier';
 
     return (
         <>
@@ -185,7 +240,7 @@ export const CustomEdge = memo(({
                         refY="0"
                         markerWidth="5"
                         markerHeight="5"
-                        orient="auto-start-reverse"
+                        orient="auto"
                     >
                         <path d="M10,-5L0,0L10,5" fill={data?.lineColor || '#b1b1b7'} />
                     </marker>
@@ -234,7 +289,7 @@ export const CustomEdge = memo(({
             )}
 
             {showHandles && controlPoint1X != null && controlPoint1Y != null && (
-                <g>
+                <g style={{ pointerEvents: 'all' }}>
                     {/* First control point */}
                     <circle
                         cx={controlPoint1X}
@@ -248,6 +303,8 @@ export const CustomEdge = memo(({
                         style={{
                             cursor: isDraggingHandle === 'cp1' ? 'grabbing' : 'grab',
                             pointerEvents: 'all',
+                            position: 'relative',
+                            zIndex: 1000,
                         }}
                     />
                     {/* Second control point */}
@@ -264,6 +321,8 @@ export const CustomEdge = memo(({
                             style={{
                                 cursor: isDraggingHandle === 'cp2' ? 'grabbing' : 'grab',
                                 pointerEvents: 'all',
+                                position: 'relative',
+                                zIndex: 1000,
                             }}
                         />
                     )}

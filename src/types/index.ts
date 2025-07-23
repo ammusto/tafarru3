@@ -28,7 +28,7 @@ export interface EdgeData {
     lineWidth: number;
     lineColor: string;
     arrowStyle: 'none' | 'start' | 'end' | 'both';
-    curveStyle: 'straight' | 'curve' | 'elbow';
+    curveStyle: 'straight' | 'curve' | 'bezier' | 'elbow';
     controlPoint1X?: number;
     controlPoint1Y?: number;
     controlPoint2X?: number;

@@ -88,8 +88,11 @@ export function FlowCanvas() {
     const handleCanvasClick = useCallback((event: React.MouseEvent) => {
         if (mode !== 'node') return;
 
-        const bounds = canvasRef.current?.getBoundingClientRect();
-        if (!bounds) return;
+        // Get the React Flow wrapper element
+        const reactFlowWrapper = canvasRef.current?.querySelector('.react-flow__wrapper');
+        if (!reactFlowWrapper) return;
+
+        const bounds = reactFlowWrapper.getBoundingClientRect();
 
         // Project screen click to canvas coordinates
         let position = reactFlowInstance.project({
@@ -120,9 +123,8 @@ export function FlowCanvas() {
         };
 
         addNode(newNode);
-        setMode('select');
         setSelectedNodes([newNode.id]);
-    }, [mode, gridEnabled, reactFlowInstance, addNode, setMode, setSelectedNodes, canvasRef]);
+    }, [mode, gridEnabled, reactFlowInstance, addNode, setSelectedNodes]);
 
 
     const handleNodeClick: NodeMouseHandler = useCallback((event, node) => {
@@ -165,19 +167,19 @@ export function FlowCanvas() {
     }, [setSelectedNodes, setSelectedEdges]);
 
     // Change cursor based on mode
-    // Change cursor based on mode
     useEffect(() => {
-        if (canvasRef.current) {
+        const renderer = canvasRef.current?.querySelector('.react-flow__renderer');
+        if (renderer) {
             if (mode === 'node') {
-                canvasRef.current.style.cursor = 'crosshair';
+                renderer.classList.add('node-mode');
             } else {
-                canvasRef.current.style.cursor = 'default';
+                renderer.classList.remove('node-mode');
             }
         }
     }, [mode]);
 
     return (
-        <div ref={canvasRef} className="w-full h-full bg-white" onClick={handleCanvasClick}>
+        <div ref={canvasRef} className="w-full h-full bg-white">
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -186,7 +188,48 @@ export function FlowCanvas() {
                 onConnect={onConnect}
                 onNodeClick={handleNodeClick}
                 onEdgeClick={handleEdgeClick}
-                onPaneClick={handlePaneClick}
+                onPaneClick={(event) => {
+                    if (mode === 'node') {
+                        // Get the React Flow bounds
+                        const bounds = canvasRef.current?.getBoundingClientRect();
+                        if (!bounds) return;
+
+                        // Project screen click to canvas coordinates
+                        let position = reactFlowInstance.project({
+                            x: event.clientX - bounds.left,
+                            y: event.clientY - bounds.top,
+                        });
+
+                        // Snap to grid if enabled
+                        if (gridEnabled) {
+                            position = {
+                                x: Math.round(position.x / 10) * 10,
+                                y: Math.round(position.y / 10) * 10
+                            };
+                        }
+
+                        const newNode = {
+                            id: `node-${Date.now()}`,
+                            type: 'custom',
+                            position,
+                            data: {
+                                label: 'New Node',
+                                nodeShape: 'rounded' as const,
+                                nodeFillColor: 'white',
+                                borderStyle: 'solid' as const,
+                                borderWidth: 1,
+                                borderColor: 'black',
+                                width: 120,
+                                height: 40,
+                            },
+                        };
+
+                        addNode(newNode);
+                        setSelectedNodes([newNode.id]);
+                    } else {
+                        handlePaneClick();
+                    }
+                }}
                 onSelectionChange={handleSelectionChange}
                 onConnectStart={onConnectStart}
                 onConnectEnd={onConnectEnd}
@@ -207,6 +250,8 @@ export function FlowCanvas() {
                 snapToGrid={gridEnabled}
                 snapGrid={[10, 10]}
                 panOnDrag={mode !== 'node'}
+                panOnScroll={mode !== 'node'}
+                selectionOnDrag={mode !== 'node'}
                 defaultEdgeOptions={{
                     type: 'custom',
                     data: {

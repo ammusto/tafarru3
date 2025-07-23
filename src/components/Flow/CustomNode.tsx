@@ -176,19 +176,19 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
                 {selected && (
                     <>
                         <div
-                            className="nodrag absolute w-3 h-3 bg-blue-500 -top-1.5 -left-1.5 cursor-nw-resize z-10"
+                            className="nodrag absolute w-1.5 h-1.5 bg-blue-500 -top-0.5 -left-0.5 cursor-nw-resize z-10"
                             onMouseDown={(e) => handleResize('top-left', e)}
                         />
                         <div
-                            className="nodrag absolute w-3 h-3 bg-blue-500 -top-1.5 -right-1.5 cursor-ne-resize z-10"
+                            className="nodrag absolute w-1.5 h-1.5 bg-blue-500 -top-0.5 -right-0.5 cursor-ne-resize z-10"
                             onMouseDown={(e) => handleResize('top-right', e)}
                         />
                         <div
-                            className="nodrag absolute w-3 h-3 bg-blue-500 -bottom-1.5 -left-1.5 cursor-sw-resize z-10"
+                            className="nodrag absolute w-1.5 h-1.5 bg-blue-500 -bottom-0.5 -left-0.5 cursor-sw-resize z-10"
                             onMouseDown={(e) => handleResize('bottom-left', e)}
                         />
                         <div
-                            className="nodrag absolute w-3 h-3 bg-blue-500 -bottom-1.5 -right-1.5 cursor-se-resize z-10"
+                            className="nodrag absolute w-1.5 h-1.5 bg-blue-500 -bottom-0.5 -right-0.5 cursor-se-resize z-10"
                             onMouseDown={(e) => handleResize('bottom-right', e)}
                         />
                     </>
