@@ -2,11 +2,7 @@ import React from 'react';
 import {
     MousePointer,
     Circle,
-    GitBranch,
     Grid3x3,
-    Download,
-    Upload,
-    AlignHorizontalJustifyCenter,
     Undo,
     Redo,
     Trash2
@@ -42,8 +38,8 @@ export function ControlPanel() {
                 <button
                     onClick={() => setMode('select')}
                     className={`p-2 rounded-md transition-colors ${mode === 'select'
-                            ? 'bg-blue-500 text-white'
-                            : 'hover:bg-gray-100'
+                        ? 'bg-blue-500 text-white'
+                        : 'hover:bg-gray-100'
                         }`}
                     title="Select mode (V)"
                 >
@@ -53,32 +49,22 @@ export function ControlPanel() {
                 <button
                     onClick={() => setMode('node')}
                     className={`p-2 rounded-md transition-colors ${mode === 'node'
-                            ? 'bg-blue-500 text-white'
-                            : 'hover:bg-gray-100'
+                        ? 'bg-blue-500 text-white'
+                        : 'hover:bg-gray-100'
                         }`}
                     title="Add node (N)"
                 >
                     <Circle size={20} />
                 </button>
-
-                <button
-                    onClick={() => setMode('edge')}
-                    className={`p-2 rounded-md transition-colors ${mode === 'edge'
-                            ? 'bg-blue-500 text-white'
-                            : 'hover:bg-gray-100'
-                        }`}
-                    title="Add connection (L)"
-                >
-                    <GitBranch size={20} />
-                </button>
             </div>
+
 
             <div className="border-t pt-2">
                 <button
                     onClick={toggleGrid}
                     className={`p-2 rounded-md transition-colors w-full ${gridEnabled
-                            ? 'bg-blue-500 text-white'
-                            : 'hover:bg-gray-100'
+                        ? 'bg-blue-500 text-white'
+                        : 'hover:bg-gray-100'
                         }`}
                     title="Toggle grid"
                 >
@@ -91,8 +77,8 @@ export function ControlPanel() {
                     onClick={undo}
                     disabled={!canUndo}
                     className={`p-2 rounded-md transition-colors ${canUndo
-                            ? 'hover:bg-gray-100'
-                            : 'opacity-50 cursor-not-allowed'
+                        ? 'hover:bg-gray-100'
+                        : 'opacity-50 cursor-not-allowed'
                         }`}
                     title="Undo (Ctrl+Z)"
                 >
@@ -103,8 +89,8 @@ export function ControlPanel() {
                     onClick={redo}
                     disabled={!canRedo}
                     className={`p-2 rounded-md transition-colors ${canRedo
-                            ? 'hover:bg-gray-100'
-                            : 'opacity-50 cursor-not-allowed'
+                        ? 'hover:bg-gray-100'
+                        : 'opacity-50 cursor-not-allowed'
                         }`}
                     title="Redo (Ctrl+Shift+Z)"
                 >
@@ -112,17 +98,19 @@ export function ControlPanel() {
                 </button>
             </div>
 
-            {(selectedNodes.length > 0 || selectedEdges.length > 0) && (
-                <div className="border-t pt-2">
-                    <button
-                        onClick={handleDelete}
-                        className="p-2 rounded-md transition-colors hover:bg-red-100 text-red-600 w-full"
-                        title="Delete selected"
-                    >
-                        <Trash2 size={20} />
-                    </button>
-                </div>
-            )}
-        </div>
+            {
+                (selectedNodes.length > 0 || selectedEdges.length > 0) && (
+                    <div className="border-t pt-2">
+                        <button
+                            onClick={handleDelete}
+                            className="p-2 rounded-md transition-colors hover:bg-red-100 text-red-600 w-full"
+                            title="Delete selected"
+                        >
+                            <Trash2 size={20} />
+                        </button>
+                    </div>
+                )
+            }
+        </div >
     );
 }

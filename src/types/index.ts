@@ -29,8 +29,10 @@ export interface EdgeData {
     lineColor: string;
     arrowStyle: 'none' | 'start' | 'end' | 'both';
     curveStyle: 'straight' | 'curve' | 'elbow';
-    controlPointX?: number;
-    controlPointY?: number;
+    controlPoint1X?: number;
+    controlPoint1Y?: number;
+    controlPoint2X?: number;
+    controlPoint2Y?: number;
 }
 
 export interface CSVRow {
@@ -62,7 +64,7 @@ export interface CSVRow {
     ConnectionLabels?: string;
 }
 
-export type EditorMode = 'select' | 'node' | 'edge';
+export type EditorMode = 'select' | 'node';
 
 export interface AppState {
     projectName: string;

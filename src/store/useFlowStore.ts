@@ -157,23 +157,21 @@ export const useFlowStore = create<FlowState>()(
                     if (edgeIndex === -1) return;
 
                     const prev = state.edges[edgeIndex];
-                    const prevData: Partial<EdgeData> = prev.data || {};
+                    if (!prev.data) return;
+
+                    const current = prev.data;
 
                     const merged: EdgeData = {
-                        label: data.label ?? prevData.label ?? '',
-                        lineStyle: data.lineStyle ?? prevData.lineStyle ?? 'solid',
-                        lineWidth: data.lineWidth ?? prevData.lineWidth ?? 2,
-                        lineColor: data.lineColor ?? prevData.lineColor ?? '#000000',
-                        arrowStyle: data.arrowStyle ?? prevData.arrowStyle ?? 'none',
-                        curveStyle: data.curveStyle ?? prevData.curveStyle ?? 'straight',
-                        controlPointX:
-                            data.controlPointX !== undefined
-                                ? data.controlPointX
-                                : prevData.controlPointX ?? undefined,
-                        controlPointY:
-                            data.controlPointY !== undefined
-                                ? data.controlPointY
-                                : prevData.controlPointY ?? undefined,
+                        lineStyle: data.lineStyle ?? current.lineStyle,
+                        lineWidth: data.lineWidth ?? current.lineWidth,
+                        lineColor: data.lineColor ?? current.lineColor,
+                        arrowStyle: data.arrowStyle ?? current.arrowStyle,
+                        curveStyle: data.curveStyle ?? current.curveStyle,
+                        label: data.label ?? current.label,
+                        controlPoint1X: 'controlPoint1X' in data ? data.controlPoint1X! : current.controlPoint1X,
+                        controlPoint1Y: 'controlPoint1Y' in data ? data.controlPoint1Y! : current.controlPoint1Y,
+                        controlPoint2X: 'controlPoint2X' in data ? data.controlPoint2X! : current.controlPoint2X,
+                        controlPoint2Y: 'controlPoint2Y' in data ? data.controlPoint2Y! : current.controlPoint2Y,
                     };
 
                     state.edges[edgeIndex] = {
@@ -182,11 +180,6 @@ export const useFlowStore = create<FlowState>()(
                     };
                     state.unsavedChanges = true;
                 }),
-
-
-
-
-
 
                 deleteEdges: (edgeIds) => set((state) => {
                     state.edges = state.edges.filter(e => !edgeIds.includes(e.id));

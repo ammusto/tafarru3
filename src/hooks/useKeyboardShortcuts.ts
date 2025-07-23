@@ -32,10 +32,6 @@ export function useKeyboardShortcuts() {
                         event.preventDefault();
                         setMode('node');
                         break;
-                    case 'l':
-                        event.preventDefault();
-                        setMode('edge');
-                        break;
                     case 'delete':
                     case 'backspace':
                         event.preventDefault();

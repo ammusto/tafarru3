@@ -165,11 +165,10 @@ export function FlowCanvas() {
     }, [setSelectedNodes, setSelectedEdges]);
 
     // Change cursor based on mode
+    // Change cursor based on mode
     useEffect(() => {
         if (canvasRef.current) {
             if (mode === 'node') {
-                canvasRef.current.style.cursor = 'crosshair';
-            } else if (mode === 'edge') {
                 canvasRef.current.style.cursor = 'crosshair';
             } else {
                 canvasRef.current.style.cursor = 'default';
@@ -207,6 +206,7 @@ export function FlowCanvas() {
                 multiSelectionKeyCode="Shift"
                 snapToGrid={gridEnabled}
                 snapGrid={[10, 10]}
+                panOnDrag={mode !== 'node'}
                 defaultEdgeOptions={{
                     type: 'custom',
                     data: {
@@ -214,7 +214,7 @@ export function FlowCanvas() {
                         lineWidth: 2,
                         lineColor: '#b1b1b7',
                         arrowStyle: 'end',
-                        curveStyle: 'straight',
+                        curveStyle: 'curve',
                     } as EdgeData,
                 }}
                 fitView

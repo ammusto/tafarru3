@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState, useCallback, useEffect } from 'react';
+import React, { memo, useMemo, useState, useCallback } from 'react';
 import {
     EdgeProps,
     getSmoothStepPath,
@@ -9,7 +9,7 @@ import {
 import { EdgeData } from '../../types';
 import { useFlowStore } from '../../store/useFlowStore';
 
-const NODE_PADDING = 1;
+const NODE_PADDING = 0;
 
 function applyPositionOffset(x: number, y: number, position: Position, offset: number): [number, number] {
     switch (position) {
@@ -35,67 +35,109 @@ export const CustomEdge = memo(({
     interactionWidth = 20,
 }: EdgeProps<EdgeData>) => {
     const { updateEdge } = useFlowStore();
-    const [isDraggingHandle, setIsDraggingHandle] = useState(false);
+    const [isDraggingHandle, setIsDraggingHandle] = useState<string | null>(null);
 
+    const roundedSourceX = Math.round(sourceX);
+    const roundedSourceY = Math.round(sourceY);
+    const roundedTargetX = Math.round(targetX);
+    const roundedTargetY = Math.round(targetY);
 
-    const [edgePath, labelX, labelY, controlPointX, controlPointY] = useMemo(() => {
-        const [adjSourceX, adjSourceY] = applyPositionOffset(sourceX, sourceY, sourcePosition, NODE_PADDING);
-        const [adjTargetX, adjTargetY] = applyPositionOffset(targetX, targetY, targetPosition, NODE_PADDING);
-
-        // force directionality: path must start at source and go to target
-        const fromX = adjSourceX;
-        const fromY = adjSourceY;
-        const toX = adjTargetX;
-        const toY = adjTargetY;
+    const [edgePath, labelX, labelY, controlPoint1X, controlPoint1Y, controlPoint2X, controlPoint2Y] = useMemo(() => {
+        const [adjSourceX, adjSourceY] = applyPositionOffset(roundedSourceX, roundedSourceY, sourcePosition, NODE_PADDING);
+        const [adjTargetX, adjTargetY] = applyPositionOffset(roundedTargetX, roundedTargetY, targetPosition, NODE_PADDING);
 
         if (data?.curveStyle === 'curve') {
-            const cpX = data.controlPointX ?? Math.round((fromX + toX) / 2);
-            const cpY = data.controlPointY ?? Math.round((fromY + toY) / 2);
-            const path = `M ${fromX},${fromY} Q ${cpX},${cpY} ${toX},${toY}`;
-            return [path, Math.round((fromX + toX) / 2), Math.round((fromY + toY) / 2), cpX, cpY];
+            // Calculate default control points for a nice S-curve
+            const midX = (adjSourceX + adjTargetX) / 2;
+            const midY = (adjSourceY + adjTargetY) / 2;
+
+            // Calculate offset based on the direction
+            const dx = adjTargetX - adjSourceX;
+            const dy = adjTargetY - adjSourceY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const offset = Math.min(100, distance * 0.3);
+
+            // Default control points create an S-curve
+            const cp1X = data.controlPoint1X ?? Math.round(adjSourceX + dx * 0.25 + (dy / distance) * offset);
+            const cp1Y = data.controlPoint1Y ?? Math.round(adjSourceY + dy * 0.25 - (dx / distance) * offset);
+            const cp2X = data.controlPoint2X ?? Math.round(adjTargetX - dx * 0.25 - (dy / distance) * offset);
+            const cp2Y = data.controlPoint2Y ?? Math.round(adjTargetY - dy * 0.25 + (dx / distance) * offset);
+
+            // Use cubic bezier curve (C command)
+            const path = `M ${adjSourceX},${adjSourceY} C ${cp1X},${cp1Y} ${cp2X},${cp2Y} ${adjTargetX},${adjTargetY}`;
+            return [path, Math.round(midX), Math.round(midY), cp1X, cp1Y, cp2X, cp2Y];
         }
 
         if (data?.curveStyle === 'elbow') {
             const [path, labelX, labelY] = getSmoothStepPath({
-                sourceX: fromX,
-                sourceY: fromY,
-                targetX: toX,
-                targetY: toY,
+                sourceX: adjSourceX,
+                sourceY: adjSourceY,
+                targetX: adjTargetX,
+                targetY: adjTargetY,
                 sourcePosition,
                 targetPosition,
             });
-            return [path, Math.round(labelX), Math.round(labelY), null, null];
+            return [path, Math.round(labelX), Math.round(labelY), null, null, null, null];
         }
 
         const [path, labelX, labelY] = getStraightPath({
-            sourceX: fromX,
-            sourceY: fromY,
-            targetX: toX,
-            targetY: toY,
+            sourceX: adjSourceX,
+            sourceY: adjSourceY,
+            targetX: adjTargetX,
+            targetY: adjTargetY,
         });
-        return [path, Math.round(labelX), Math.round(labelY), null, null];
+        return [path, Math.round(labelX), Math.round(labelY), null, null, null, null];
     }, [
         data?.curveStyle,
-        data?.controlPointX,
-        data?.controlPointY,
-        sourceX,
-        sourceY,
-        targetX,
-        targetY,
+        data?.controlPoint1X,
+        data?.controlPoint1Y,
+        data?.controlPoint2X,
+        data?.controlPoint2Y,
+        roundedSourceX,
+        roundedSourceY,
+        roundedTargetX,
+        roundedTargetY,
         sourcePosition,
         targetPosition,
     ]);
 
-    useEffect(() => {
-        if (
-            data?.curveStyle === 'curve' &&
-            (data.controlPointX === undefined || data.controlPointY === undefined)
-        ) {
-            const cpX = Math.round((sourceX + targetX) / 2);
-            const cpY = Math.round((sourceY + targetY) / 2);
-            updateEdge(id, { controlPointX: cpX, controlPointY: cpY });
-        }
-    }, [id, data, sourceX, sourceY, targetX, targetY, updateEdge]);
+    const handleControlPointDrag = useCallback((controlPointId: string, event: React.MouseEvent) => {
+        event.stopPropagation();
+        setIsDraggingHandle(controlPointId);
+
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startControlX = controlPointId === 'cp1' ? controlPoint1X! : controlPoint2X!;
+        const startControlY = controlPointId === 'cp1' ? controlPoint1Y! : controlPoint2Y!;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+
+            if (controlPointId === 'cp1') {
+                updateEdge(id, {
+                    ...data,
+                    controlPoint1X: Math.round(startControlX + deltaX),
+                    controlPoint1Y: Math.round(startControlY + deltaY),
+                });
+            } else {
+                updateEdge(id, {
+                    ...data,
+                    controlPoint2X: Math.round(startControlX + deltaX),
+                    controlPoint2Y: Math.round(startControlY + deltaY),
+                });
+            }
+        };
+
+        const handleMouseUp = () => {
+            setIsDraggingHandle(null);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    }, [id, controlPoint1X, controlPoint1Y, controlPoint2X, controlPoint2Y, data, updateEdge]);
 
     const strokeDasharray = useMemo(() => {
         if (data?.lineStyle === 'dashed') return '5,5';
@@ -103,13 +145,6 @@ export const CustomEdge = memo(({
         return undefined;
     }, [data?.lineStyle]);
 
-    const customMarkerStart = useMemo(() => {
-        if (data?.arrowStyle === 'start' || data?.arrowStyle === 'both') {
-            return `url(#arrow-${id}-start)`;
-
-        }
-        return undefined;
-    }, [data?.arrowStyle, id]);
     const customMarkerEnd = useMemo(() => {
         if (data?.arrowStyle === 'end' || data?.arrowStyle === 'both') {
             return `url(#arrow-${id}-end)`;
@@ -117,64 +152,44 @@ export const CustomEdge = memo(({
         return undefined;
     }, [data?.arrowStyle, id]);
 
-    const handleControlPointDrag = useCallback((event: React.MouseEvent) => {
-        event.stopPropagation();
-        setIsDraggingHandle(true);
+    const customMarkerStart = useMemo(() => {
+        if (data?.arrowStyle === 'start' || data?.arrowStyle === 'both') {
+            return `url(#arrow-${id}-start)`;
+        }
+        return undefined;
+    }, [data?.arrowStyle, id]);
 
-        const startX = event.clientX;
-        const startY = event.clientY;
-        const startControlX = controlPointX!;
-        const startControlY = controlPointY!;
-
-        const handleMouseMove = (e: MouseEvent) => {
-            const deltaX = e.clientX - startX;
-            const deltaY = e.clientY - startY;
-
-            updateEdge(id, {
-                ...data,
-                controlPointX: Math.round(startControlX + deltaX),
-                controlPointY: Math.round(startControlY + deltaY),
-            });
-        };
-
-        const handleMouseUp = () => {
-            setIsDraggingHandle(false);
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    }, [id, controlPointX, controlPointY, data, updateEdge]);
-
-    const showHandle = selected && data?.curveStyle === 'curve';
+    const showHandles = selected && data?.curveStyle === 'curve';
 
     return (
         <>
             <defs>
-                <marker
-                    id={`arrow-${id}-start`}
-                    viewBox="0 0 10 10"
-                    refX="10"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto-start-reverse"
-                >
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill={data?.lineColor || '#b1b1b7'} />
-                </marker>
-
-                <marker
-                    id={`arrow-${id}-end`}
-                    viewBox="0 0 10 10"
-                    refX="10"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto"
-                >
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill={data?.lineColor || '#b1b1b7'} />
-                </marker>
+                {(data?.arrowStyle === 'end' || data?.arrowStyle === 'both') && (
+                    <marker
+                        id={`arrow-${id}-end`}
+                        viewBox="0 -5 10 10"
+                        refX="10"
+                        refY="0"
+                        markerWidth="5"
+                        markerHeight="5"
+                        orient="auto"
+                    >
+                        <path d="M0,-5L10,0L0,5" fill={data?.lineColor || '#b1b1b7'} />
+                    </marker>
+                )}
+                {(data?.arrowStyle === 'start' || data?.arrowStyle === 'both') && (
+                    <marker
+                        id={`arrow-${id}-start`}
+                        viewBox="0 -5 10 10"
+                        refX="0"
+                        refY="0"
+                        markerWidth="5"
+                        markerHeight="5"
+                        orient="auto-start-reverse"
+                    >
+                        <path d="M10,-5L0,0L10,5" fill={data?.lineColor || '#b1b1b7'} />
+                    </marker>
+                )}
             </defs>
 
             <path
@@ -218,22 +233,40 @@ export const CustomEdge = memo(({
                 </EdgeLabelRenderer>
             )}
 
-            {showHandle && controlPointX != null && controlPointY != null && (
+            {showHandles && controlPoint1X != null && controlPoint1Y != null && (
                 <g>
+                    {/* First control point */}
                     <circle
-                        cx={controlPointX}
-                        cy={controlPointY}
-                        r={8}
+                        cx={controlPoint1X}
+                        cy={controlPoint1Y}
+                        r={6}
                         fill="#ff0073"
                         stroke="white"
                         strokeWidth={2}
                         className="react-flow__edge-control-point"
-                        onMouseDown={handleControlPointDrag}
+                        onMouseDown={(e) => handleControlPointDrag('cp1', e)}
                         style={{
-                            cursor: isDraggingHandle ? 'grabbing' : 'grab',
+                            cursor: isDraggingHandle === 'cp1' ? 'grabbing' : 'grab',
                             pointerEvents: 'all',
                         }}
                     />
+                    {/* Second control point */}
+                    {controlPoint2X != null && controlPoint2Y != null && (
+                        <circle
+                            cx={controlPoint2X}
+                            cy={controlPoint2Y}
+                            r={6}
+                            fill="#00ff73"
+                            stroke="white"
+                            strokeWidth={2}
+                            className="react-flow__edge-control-point"
+                            onMouseDown={(e) => handleControlPointDrag('cp2', e)}
+                            style={{
+                                cursor: isDraggingHandle === 'cp2' ? 'grabbing' : 'grab',
+                                pointerEvents: 'all',
+                            }}
+                        />
+                    )}
                 </g>
             )}
         </>
