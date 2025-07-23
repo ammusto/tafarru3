@@ -104,7 +104,7 @@ export function NodeInspector() {
             {nodeData && !multiSelect && (
                 <div className="space-y-3">
                     <div>
-                        <label className="block text-sm font-medium mb-1">Label Override</label>
+                        <label className="block text-sm font-medium mb-1">Label</label>
                         <input
                             type="text"
                             value={nodeData.label || ''}

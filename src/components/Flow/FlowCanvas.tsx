@@ -86,34 +86,42 @@ export function FlowCanvas() {
 
     // Handle canvas click based on mode
     const handleCanvasClick = useCallback((event: React.MouseEvent) => {
-        if (mode === 'node') {
-            const bounds = canvasRef.current?.getBoundingClientRect();
-            if (!bounds) return;
+        if (mode !== 'node') return;
 
-            const position = reactFlowInstance.project({
-                x: event.clientX - bounds.left,
-                y: event.clientY - bounds.top,
-            });
+        const bounds = canvasRef.current?.getBoundingClientRect();
+        if (!bounds) return;
 
-            const newNode = {
-                id: `node-${Date.now()}`,
-                type: 'custom',
-                position,
-                data: {
-                    label: 'New Node',
-                    nodeShape: 'rectangle' as const,
-                    nodeFillColor: 'white',
-                    borderStyle: 'solid' as const,
-                    borderWidth: 2,
-                    borderColor: 'black',
-                } as NodeData,
-            };
+        // Project screen click to canvas coordinates
+        let position = reactFlowInstance.project({
+            x: event.clientX - bounds.left,
+            y: event.clientY - bounds.top,
+        });
 
-            addNode(newNode);
-            setMode('select');
-            setSelectedNodes([newNode.id]);
+        // Snap to grid if enabled
+        if (gridEnabled) {
+            const [snapX, snapY] = [Math.round(position.x / 10) * 10, Math.round(position.y / 10) * 10];
+            position = { x: snapX, y: snapY };
         }
-    }, [mode, reactFlowInstance, addNode, setMode, setSelectedNodes]);
+
+        const newNode = {
+            id: `node-${Date.now()}`,
+            type: 'custom',
+            position,
+            data: {
+                label: 'New Node',
+                nodeShape: 'rectangle',
+                nodeFillColor: 'white',
+                borderStyle: 'solid',
+                borderWidth: 2,
+                borderColor: 'black',
+            } satisfies NodeData,
+        };
+
+        addNode(newNode);
+        setMode('select');
+        setSelectedNodes([newNode.id]);
+    }, [mode, gridEnabled, reactFlowInstance, addNode, setMode, setSelectedNodes, canvasRef]);
+
 
     const handleNodeClick: NodeMouseHandler = useCallback((event, node) => {
         event.stopPropagation();
@@ -168,7 +176,7 @@ export function FlowCanvas() {
     }, [mode]);
 
     return (
-        <div ref={canvasRef} className="w-full h-full" onClick={handleCanvasClick}>
+        <div ref={canvasRef} className="w-full h-full bg-white" onClick={handleCanvasClick}>
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
