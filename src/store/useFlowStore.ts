@@ -11,6 +11,7 @@ interface FlowState {
     // Flow state
     nodes: Node<NodeData>[];
     edges: Edge<EdgeData>[];
+    shouldFitView: boolean;
 
     // UI state
     selectedNodes: string[];
@@ -27,6 +28,7 @@ interface FlowState {
     onNodesChange: (changes: NodeChange[]) => void;
     onEdgesChange: (changes: EdgeChange[]) => void;
     onConnect: (connection: Connection) => void;
+    setShouldFitView: (value: boolean) => void;
 
     // Node actions
     addNode: (node: Node<NodeData>) => void;
@@ -93,6 +95,8 @@ export const useFlowStore = create<FlowState>()(
                 projectName: 'Untitled',
                 unsavedChanges: false,
                 isInteracting: false,
+                shouldFitView: false,
+
 
                 // Helper to get next node ID
                 getNextNodeId: () => {
@@ -160,7 +164,9 @@ export const useFlowStore = create<FlowState>()(
                     state.nodes = nodes;
                     state.unsavedChanges = true;
                 }),
-
+                setShouldFitView: (value) => set((state) => {
+                    state.shouldFitView = value;
+                }),
                 setEdges: (edges) => set((state) => {
                     state.edges = edges;
                     state.unsavedChanges = true;

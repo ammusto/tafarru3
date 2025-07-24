@@ -29,6 +29,7 @@ const edgeTypes = {
 
 export function FlowCanvas() {
     const reactFlowInstance = useReactFlow();
+    const { shouldFitView, setShouldFitView } = useFlowStore();
     const canvasRef = useRef<HTMLDivElement>(null);
     const { setIsInteracting } = useFlowStore();
     const edgeUpdateSuccessful = useRef(true);
@@ -142,6 +143,17 @@ export function FlowCanvas() {
         }
     }, [mode, selectedNodes, setSelectedNodes, setSelectedEdges]);
 
+    useEffect(() => {
+        if (shouldFitView && nodes.length > 0) {
+            // Small delay to ensure positions are updated
+            setTimeout(() => {
+                reactFlowInstance.fitView({ padding: 0.1 });
+                setShouldFitView(false); // Reset the flag
+            }, 0);
+        }
+    }, [shouldFitView, nodes.length, reactFlowInstance, setShouldFitView]);
+
+
     const handleEdgeClick = useCallback((event: React.MouseEvent, edge: any) => {
         event.stopPropagation();
         if (mode === 'select') {
@@ -187,6 +199,8 @@ export function FlowCanvas() {
                 onConnect={onConnect}
                 onNodeClick={handleNodeClick}
                 onEdgeClick={handleEdgeClick}
+                defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+
                 onPaneClick={(event) => {
                     if (mode === 'node') {
                         // Get the React Flow bounds

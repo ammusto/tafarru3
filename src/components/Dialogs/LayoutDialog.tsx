@@ -3,11 +3,13 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X, GitBranch } from 'lucide-react';
 import { useReactFlow } from 'reactflow';
 import dagre from 'dagre';
+import { useFlowStore } from '../../store/useFlowStore';
 
 export function LayoutDialog() {
     const [open, setOpen] = useState(false);
     const [spacing, setSpacing] = useState(75);
     const { getNodes, getEdges, setNodes } = useReactFlow();
+    const { setShouldFitView } = useFlowStore();
 
     const handleAutoLayout = () => {
         const nodes = getNodes();
@@ -83,6 +85,7 @@ export function LayoutDialog() {
         });
 
         setNodes(layoutedNodes);
+        setShouldFitView(true);
         setOpen(false);
     };
 

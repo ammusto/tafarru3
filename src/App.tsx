@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ReactFlowProvider } from 'reactflow';
 import { FlowCanvas } from './components/Flow/FlowCanvas';
 import { ControlPanel } from './components/Panels/ControlPanel';
@@ -15,7 +15,9 @@ import { saveAs } from 'file-saver';
 import { generateTemplateCSV } from './utils/csv';
 
 function AppContent() {
-  const { projectName, unsavedChanges } = useFlowStore();
+  const { projectName, unsavedChanges, nodes, addNode, setProjectName } = useFlowStore();
+  const initialized = useRef(false);
+
   useKeyboardShortcuts();
   useAutoSave();
 
@@ -28,9 +30,34 @@ function AppContent() {
       }
     };
 
+
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [unsavedChanges]);
+
+  useEffect(() => {
+    if (!initialized.current && nodes.length === 0) {
+      initialized.current = true;
+
+      addNode({
+        id: 'node-1',
+        type: 'custom',
+        position: { x: 512, y: 384 },
+        data: {
+          label: 'New Node',
+          nodeShape: 'rounded',
+          nodeFillColor: 'white',
+          borderStyle: 'solid',
+          borderWidth: 1,
+          borderColor: 'black',
+          width: 120,
+          height: 40,
+        },
+      });
+
+      setProjectName('New Project');
+    }
+  }, []);
 
   const handleDownloadTemplate = () => {
     const csv = generateTemplateCSV();
