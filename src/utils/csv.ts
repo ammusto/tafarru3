@@ -38,13 +38,13 @@ export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: 
                                     y: row.Y ? parseFloat(row.Y) : 0,
                                 },
                                 data: {
-                                    label: row.Label,
-                                    deathDate: row.DeathDate,
-                                    kunya: row.Kunya,
-                                    nasab: row.Nasab,
-                                    nisba: row.Nisba,
-                                    shuhra: row.Shuhra,
-                                    biography: row.Biography,
+                                    label: row.Label || '',
+                                    deathDate: row.DeathDate || '',
+                                    kunya: row.Kunya || '',
+                                    nasab: row.Nasab || '',
+                                    nisba: row.Nisba || '',
+                                    shuhra: row.Shuhra || '',
+                                    biography: row.Biography || '',
                                     nodeShape: (row.NodeShape as NodeData['nodeShape']) || 'rectangle',
                                     nodeFillColor: row.NodeFillColor || 'white',
                                     borderStyle: (row.BorderStyle as NodeData['borderStyle']) || 'solid',
@@ -58,7 +58,7 @@ export const parseCSV = (file: File): Promise<{ nodes: Node<NodeData>[], edges: 
 
                             nodes.push(node);
 
-                            // ONLY create edge from ParentID if NO ConnectionData exists anywhere in the file
+                            // only create edge from ParentID if no ConnectionData exists anywhere in the file
                             if (!hasAnyConnectionData && row.ParentID) {
                                 edges.push({
                                     id: `e${row.ParentID}-${row.ID}`,

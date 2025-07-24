@@ -85,48 +85,6 @@ export function FlowCanvas() {
         []
     );
 
-    // Handle canvas click based on mode
-    const handleCanvasClick = useCallback((event: React.MouseEvent) => {
-        if (mode !== 'node') return;
-
-        // Get the React Flow wrapper element
-        const reactFlowWrapper = canvasRef.current?.querySelector('.react-flow__wrapper');
-        if (!reactFlowWrapper) return;
-
-        const bounds = reactFlowWrapper.getBoundingClientRect();
-
-        // Project screen click to canvas coordinates
-        let position = reactFlowInstance.project({
-            x: event.clientX - bounds.left,
-            y: event.clientY - bounds.top,
-        });
-
-        // Snap to grid if enabled
-        if (gridEnabled) {
-            const [snapX, snapY] = [Math.round(position.x / 10) * 10, Math.round(position.y / 10) * 10];
-            position = { x: snapX, y: snapY };
-        }
-
-        const newNode = {
-            id: getNextNodeId(), // Use sequential ID
-            type: 'custom',
-            position,
-            data: {
-                label: 'New Node',
-                nodeShape: 'rounded',
-                nodeFillColor: 'white',
-                borderStyle: 'solid',
-                borderWidth: 1,
-                borderColor: 'black',
-                width: 120,
-                height: 40,
-            } satisfies NodeData,
-        };
-
-        addNode(newNode);
-        setSelectedNodes([newNode.id]);
-    }, [mode, gridEnabled, reactFlowInstance, addNode, setSelectedNodes, getNextNodeId]);
-
     const handleNodeClick: NodeMouseHandler = useCallback((event, node) => {
         event.stopPropagation();
         if (mode === 'select') {
@@ -213,6 +171,16 @@ export function FlowCanvas() {
                             y: event.clientY - bounds.top,
                         });
 
+                        // Default dimensions for new node
+                        const defaultWidth = 120;
+                        const defaultHeight = 40;
+
+                        // Adjust position to center the node at click point
+                        position = {
+                            x: position.x - defaultWidth / 2,
+                            y: position.y - defaultHeight / 2
+                        };
+
                         // Snap to grid if enabled
                         if (gridEnabled) {
                             position = {
@@ -222,7 +190,7 @@ export function FlowCanvas() {
                         }
 
                         const newNode = {
-                            id: getNextNodeId(), // Use sequential ID
+                            id: getNextNodeId(),
                             type: 'custom',
                             position,
                             data: {
@@ -232,11 +200,10 @@ export function FlowCanvas() {
                                 borderStyle: 'solid' as const,
                                 borderWidth: 1,
                                 borderColor: 'black',
-                                width: 120,
-                                height: 40,
+                                width: defaultWidth,
+                                height: defaultHeight,
                             },
                         };
-
                         addNode(newNode);
                         setSelectedNodes([newNode.id]);
                     } else {

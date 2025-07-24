@@ -3,26 +3,32 @@ import type { NameComponents } from '../types';
 export const formatNodeLabel = (
     components: NameComponents & { label?: string; deathDate?: string }
 ): string => {
+    let baseLabel = '';
+
     // If explicit label is provided, use it
     if (components.label) {
-        return components.label;
+        baseLabel = components.label;
+    } else if (components.shuhra) {
+        // Use shuhra if available
+        baseLabel = components.shuhra;
+    } else {
+        // Otherwise combine available components
+        const parts = [];
+        if (components.kunya) parts.push(components.kunya);
+        if (components.nasab) parts.push(components.nasab);
+        if (components.nisba) parts.push(components.nisba);
+        baseLabel = parts.join(' ') || 'New Node';
     }
 
-    // Use shuhra if available
-    if (components.shuhra) {
-        return components.shuhra + (components.deathDate ? ` (${components.deathDate})` : '');
+    // Always append death date if available
+    if (components.deathDate) {
+        // Format the death date properly
+        const formattedDate = parseDeathDate(components.deathDate);
+        return `${baseLabel} (${formattedDate})`;
     }
 
-    // Otherwise combine available components
-    const parts = [];
-    if (components.kunya) parts.push(components.kunya);
-    if (components.nasab) parts.push(components.nasab);
-    if (components.nisba) parts.push(components.nisba);
-
-    const name = parts.join(' ') || 'New Node';
-    return name + (components.deathDate ? ` (${components.deathDate})` : '');
+    return baseLabel;
 };
-
 export const parseDeathDate = (date: string): string => {
     // Handle various death date formats
     if (!date) return '';
