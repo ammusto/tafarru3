@@ -3,7 +3,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X, GitBranch } from 'lucide-react';
 import { useReactFlow } from 'reactflow';
 import dagre from 'dagre';
-import { useFlowStore } from '../../store/useFlowStore';
 
 export function LayoutDialog() {
     const [open, setOpen] = useState(false);
@@ -48,13 +47,13 @@ export function LayoutDialog() {
         });
 
         // Group nodes by parent to fix spacing between siblings
-        const nodesByParent = new Map();
-        layoutedNodes.forEach(node => {
+        const nodesByParent = new Map<string, typeof layoutedNodes>();
+        layoutedNodes.forEach((node) => {
             const parentId = node.data.parentId || 'root';
             if (!nodesByParent.has(parentId)) {
                 nodesByParent.set(parentId, []);
             }
-            nodesByParent.get(parentId).push(node);
+            nodesByParent.get(parentId)!.push(node);
         });
 
         // Fix horizontal spacing for each group of siblings
@@ -67,11 +66,11 @@ export function LayoutDialog() {
             siblings.sort((a, b) => a.position.x - b.position.x);
 
             // Calculate total width needed
-            const totalWidth = siblings.reduce((sum, node) => sum + (node.data.width || 150), 0)
+            const totalWidth = siblings.reduce((sum: number, node) => sum + (node.data.width || 150), 0)
                 + (siblings.length - 1) * FIXED_GAP;
 
             // Get center position (average of current positions)
-            const centerX = siblings.reduce((sum, node) => sum + node.position.x + (node.data.width || 150) / 2, 0) / siblings.length;
+            const centerX = siblings.reduce((sum: number, node) => sum + node.position.x + (node.data.width || 150) / 2, 0) / siblings.length;
 
             // Reposition with fixed gaps, centered around original position
             let currentX = centerX - totalWidth / 2;
