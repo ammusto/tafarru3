@@ -18,6 +18,7 @@ export interface NodeData extends NameComponents {
     borderColor: string;
     width?: number;
     height?: number;
+    parentId?: string; // Added parentId field
 }
 
 export interface EdgeData {
@@ -59,9 +60,7 @@ export interface CSVRow {
     Y?: string;
     Width?: string;
     Height?: string;
-    Connections?: string;
-    ConnectionStyles?: string;
-    ConnectionLabels?: string;
+    ConnectionData?: string;
 }
 
 export type EditorMode = 'select' | 'node';

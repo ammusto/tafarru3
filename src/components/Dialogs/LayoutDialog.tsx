@@ -12,9 +12,7 @@ export function LayoutDialog() {
 
     const handleAutoLayout = () => {
         const nodes = getNodes();
-        const edges = getEdges();
 
-        // Create a new dagre graph
         const dagreGraph = new dagre.graphlib.Graph();
         dagreGraph.setDefaultEdgeLabel(() => ({}));
         dagreGraph.setGraph({ rankdir: 'TB', nodesep: 50, ranksep: spacing });
@@ -27,16 +25,18 @@ export function LayoutDialog() {
             });
         });
 
-        // Add edges to dagre
-        edges.forEach((edge) => {
-            dagreGraph.setEdge(edge.source, edge.target);
+        // Add edges based on parentId
+        nodes.forEach((node) => {
+            if (node.data.parentId && nodes.some(n => n.id === node.data.parentId)) {
+                dagreGraph.setEdge(node.data.parentId, node.id);
+            }
         });
 
         // Calculate the layout
         dagre.layout(dagreGraph);
 
-        // Apply the layout
-        const layoutedNodes = nodes.map((node) => {
+        // Get initial positions from dagre
+        let layoutedNodes = nodes.map((node) => {
             const nodeWithPosition = dagreGraph.node(node.id);
             return {
                 ...node,
@@ -45,6 +45,42 @@ export function LayoutDialog() {
                     y: nodeWithPosition.y - (node.data.height || 50) / 2,
                 },
             };
+        });
+
+        // Group nodes by parent to fix spacing between siblings
+        const nodesByParent = new Map();
+        layoutedNodes.forEach(node => {
+            const parentId = node.data.parentId || 'root';
+            if (!nodesByParent.has(parentId)) {
+                nodesByParent.set(parentId, []);
+            }
+            nodesByParent.get(parentId).push(node);
+        });
+
+        // Fix horizontal spacing for each group of siblings
+        const FIXED_GAP = 30; // Fixed pixel gap between nodes
+
+        nodesByParent.forEach((siblings) => {
+            if (siblings.length <= 1) return;
+
+            // Sort siblings by their current x position
+            siblings.sort((a, b) => a.position.x - b.position.x);
+
+            // Calculate total width needed
+            const totalWidth = siblings.reduce((sum, node) => sum + (node.data.width || 150), 0)
+                + (siblings.length - 1) * FIXED_GAP;
+
+            // Get center position (average of current positions)
+            const centerX = siblings.reduce((sum, node) => sum + node.position.x + (node.data.width || 150) / 2, 0) / siblings.length;
+
+            // Reposition with fixed gaps, centered around original position
+            let currentX = centerX - totalWidth / 2;
+
+            siblings.forEach((node) => {
+                const nodeWidth = node.data.width || 150;
+                node.position.x = currentX;
+                currentX += nodeWidth + FIXED_GAP;
+            });
         });
 
         setNodes(layoutedNodes);

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import ReactFlow, {
     Background,
     Controls,
@@ -47,7 +47,7 @@ export function FlowCanvas() {
         setSelectedNodes,
         setSelectedEdges,
         clearSelection,
-        setMode,
+        getNextNodeId,
         selectedNodes,
     } = useFlowStore();
 
@@ -107,7 +107,7 @@ export function FlowCanvas() {
         }
 
         const newNode = {
-            id: `node-${Date.now()}`,
+            id: getNextNodeId(), // Use sequential ID
             type: 'custom',
             position,
             data: {
@@ -124,8 +124,7 @@ export function FlowCanvas() {
 
         addNode(newNode);
         setSelectedNodes([newNode.id]);
-    }, [mode, gridEnabled, reactFlowInstance, addNode, setSelectedNodes]);
-
+    }, [mode, gridEnabled, reactFlowInstance, addNode, setSelectedNodes, getNextNodeId]);
 
     const handleNodeClick: NodeMouseHandler = useCallback((event, node) => {
         event.stopPropagation();
@@ -209,7 +208,7 @@ export function FlowCanvas() {
                         }
 
                         const newNode = {
-                            id: `node-${Date.now()}`,
+                            id: getNextNodeId(), // Use sequential ID
                             type: 'custom',
                             position,
                             data: {

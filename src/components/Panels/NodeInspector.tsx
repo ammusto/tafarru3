@@ -33,6 +33,7 @@ export function NodeInspector() {
                     shuhra: '',
                     deathDate: '',
                     biography: '',
+                    parentId: undefined,
                 });
                 setEdgeData(null);
                 setMultiSelect(true);
@@ -103,6 +104,18 @@ export function NodeInspector() {
 
             {nodeData && !multiSelect && (
                 <div className="space-y-3">
+                    {/* Show Node ID and Parent ID */}
+                    <div className="p-2 bg-gray-50 rounded">
+                        <div className="text-sm">
+                            <span className="font-medium">Node ID:</span> {selectedNodes[0]}
+                        </div>
+                        {nodeData.parentId && (
+                            <div className="text-sm">
+                                <span className="font-medium">Parent ID:</span> {nodeData.parentId}
+                            </div>
+                        )}
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium mb-1">Label</label>
                         <input
@@ -200,7 +213,6 @@ export function NodeInspector() {
 
             {edgeData && (
                 <div className="space-y-3">
-                    {/* Edge properties remain the same */}
                     <div>
                         <label className="block text-sm font-medium mb-1">Label</label>
                         <input

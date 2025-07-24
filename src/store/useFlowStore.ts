@@ -19,7 +19,7 @@ interface FlowState {
     gridEnabled: boolean;
     projectName: string;
     unsavedChanges: boolean;
-    isInteracting: boolean; // ADD THIS
+    isInteracting: boolean;
 
     // Actions
     setNodes: (nodes: Node<NodeData>[]) => void;
@@ -48,13 +48,36 @@ interface FlowState {
     toggleGrid: () => void;
     setProjectName: (name: string) => void;
     setUnsavedChanges: (value: boolean) => void;
-    setIsInteracting: (value: boolean) => void; // ADD THIS
+    setIsInteracting: (value: boolean) => void;
 
     // Import/Export
     importData: (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]) => void;
     clearAll: () => void;
+
+    // Helper functions
+    getNextNodeId: () => string;
+    recalculateNodeIds: () => void;
 }
 
+// Helper function to get numeric ID from node ID string
+const getNumericId = (nodeId: string): number => {
+    const match = nodeId.match(/(\d+)$/);
+    return match ? parseInt(match[1]) : 0;
+};
+
+// Helper function to update ParentID in node data
+const updateParentIdInNode = (node: Node<NodeData>, oldParentId: string, newParentId: string): Node<NodeData> => {
+    if (node.data.parentId === oldParentId) {
+        return {
+            ...node,
+            data: {
+                ...node.data,
+                parentId: newParentId
+            }
+        };
+    }
+    return node;
+};
 
 export const useFlowStore = create<FlowState>()(
     subscribeWithSelector(
@@ -71,6 +94,66 @@ export const useFlowStore = create<FlowState>()(
                 unsavedChanges: false,
                 isInteracting: false,
 
+                // Helper to get next node ID
+                getNextNodeId: () => {
+                    const state = get();
+                    const nodeIds = state.nodes.map(n => getNumericId(n.id));
+                    const maxId = nodeIds.length > 0 ? Math.max(...nodeIds) : 0;
+                    return `node-${maxId + 1}`;
+                },
+
+                // Recalculate all node IDs and update parentIds
+                recalculateNodeIds: () => set((state) => {
+                    // Create mapping of old IDs to new IDs
+                    const idMapping: Record<string, string> = {};
+
+                    // Sort nodes by their current numeric ID
+                    const sortedNodes = [...state.nodes].sort((a, b) => {
+                        const aId = getNumericId(a.id);
+                        const bId = getNumericId(b.id);
+                        return aId - bId;
+                    });
+
+                    // Assign new sequential IDs
+                    sortedNodes.forEach((node, index) => {
+                        const newId = `node-${index + 1}`;
+                        if (node.id !== newId) {
+                            idMapping[node.id] = newId;
+                        }
+                    });
+
+                    // Update nodes with new IDs and update parentIds
+                    state.nodes = sortedNodes.map((node, index) => {
+                        const newId = `node-${index + 1}`;
+                        let updatedNode = { ...node, id: newId };
+
+                        // Update parentId if it was changed
+                        if (node.data.parentId && idMapping[node.data.parentId]) {
+                            updatedNode.data = {
+                                ...updatedNode.data,
+                                parentId: idMapping[node.data.parentId]
+                            };
+                        }
+
+                        return updatedNode;
+                    });
+
+                    // Update edges with new node IDs
+                    state.edges = state.edges.map(edge => {
+                        const newSource = idMapping[edge.source] || edge.source;
+                        const newTarget = idMapping[edge.target] || edge.target;
+
+                        return {
+                            ...edge,
+                            id: edge.id.replace(edge.source, newSource).replace(edge.target, newTarget),
+                            source: newSource,
+                            target: newTarget
+                        };
+                    });
+
+                    // Update selected nodes
+                    state.selectedNodes = state.selectedNodes.map(id => idMapping[id] || id);
+                }),
 
                 // Flow actions
                 setNodes: (nodes) => set((state) => {
@@ -100,10 +183,44 @@ export const useFlowStore = create<FlowState>()(
                     state.edges = applyEdgeChanges(changes, state.edges);
                     state.unsavedChanges = true;
                 }),
+
                 onConnect: (connection) => set((state) => {
                     const source = connection.source!;
                     const target = connection.target!;
                     const id = `e${source}-${target}-${Date.now()}`;
+
+                    // Find source and target nodes
+                    const sourceNode = state.nodes.find(n => n.id === source);
+                    const targetNode = state.nodes.find(n => n.id === target);
+
+                    if (sourceNode && targetNode) {
+                        // If connecting from top to bottom, make target the parent of source
+                        if (connection.sourceHandle === 'top' && connection.targetHandle === 'bottom') {
+                            const sourceNodeIndex = state.nodes.findIndex(n => n.id === source);
+                            if (sourceNodeIndex !== -1) {
+                                state.nodes[sourceNodeIndex] = {
+                                    ...state.nodes[sourceNodeIndex],
+                                    data: {
+                                        ...state.nodes[sourceNodeIndex].data,
+                                        parentId: target  // Target becomes parent of source
+                                    }
+                                };
+                            }
+                        }
+                        // If connecting from bottom to top, make source the parent of target
+                        else if (connection.sourceHandle === 'bottom' && connection.targetHandle === 'top') {
+                            const targetNodeIndex = state.nodes.findIndex(n => n.id === target);
+                            if (targetNodeIndex !== -1) {
+                                state.nodes[targetNodeIndex] = {
+                                    ...state.nodes[targetNodeIndex],
+                                    data: {
+                                        ...state.nodes[targetNodeIndex].data,
+                                        parentId: source  // Source becomes parent of target
+                                    }
+                                };
+                            }
+                        }
+                    }
 
                     const newEdge: Edge<EdgeData> = {
                         id,
@@ -127,7 +244,10 @@ export const useFlowStore = create<FlowState>()(
 
                 // Node actions
                 addNode: (node) => set((state) => {
-                    state.nodes.push(node);
+                    // Use sequential ID
+                    const nextId = state.getNextNodeId();
+                    const nodeWithId = { ...node, id: nextId };
+                    state.nodes.push(nodeWithId);
                     state.unsavedChanges = true;
                 }),
 
@@ -140,10 +260,31 @@ export const useFlowStore = create<FlowState>()(
                 }),
 
                 deleteNodes: (nodeIds) => set((state) => {
+                    // Remove nodes
                     state.nodes = state.nodes.filter(n => !nodeIds.includes(n.id));
+
+                    // Remove edges connected to deleted nodes
                     state.edges = state.edges.filter(e =>
                         !nodeIds.includes(e.source) && !nodeIds.includes(e.target)
                     );
+
+                    // Clear parentId references to deleted nodes
+                    state.nodes = state.nodes.map(node => {
+                        if (node.data.parentId && nodeIds.includes(node.data.parentId)) {
+                            return {
+                                ...node,
+                                data: {
+                                    ...node.data,
+                                    parentId: undefined
+                                }
+                            };
+                        }
+                        return node;
+                    });
+
+                    // Recalculate IDs after deletion
+                    state.recalculateNodeIds();
+
                     state.unsavedChanges = true;
                 }),
 
@@ -152,6 +293,7 @@ export const useFlowStore = create<FlowState>()(
                     state.edges.push(edge);
                     state.unsavedChanges = true;
                 }),
+
                 updateEdge: (edgeId, data) => set((state) => {
                     const edgeIndex = state.edges.findIndex(e => e.id === edgeId);
                     if (edgeIndex === -1) return;
@@ -182,6 +324,33 @@ export const useFlowStore = create<FlowState>()(
                 }),
 
                 deleteEdges: (edgeIds) => set((state) => {
+                    // When deleting edges, clear parentId if it's a hierarchical edge
+                    edgeIds.forEach(edgeId => {
+                        const edge = state.edges.find(e => e.id === edgeId);
+                        if (edge) {
+                            // Check if source is child of target
+                            if (edge.sourceHandle === 'top' && edge.targetHandle === 'bottom') {
+                                const sourceNode = state.nodes.find(n => n.id === edge.source);
+                                if (sourceNode && sourceNode.data.parentId === edge.target) {
+                                    sourceNode.data = {
+                                        ...sourceNode.data,
+                                        parentId: undefined
+                                    };
+                                }
+                            }
+                            // Check if target is child of source
+                            else if (edge.sourceHandle === 'bottom' && edge.targetHandle === 'top') {
+                                const targetNode = state.nodes.find(n => n.id === edge.target);
+                                if (targetNode && targetNode.data.parentId === edge.source) {
+                                    targetNode.data = {
+                                        ...targetNode.data,
+                                        parentId: undefined
+                                    };
+                                }
+                            }
+                        }
+                    });
+
                     state.edges = state.edges.filter(e => !edgeIds.includes(e.id));
                     state.unsavedChanges = true;
                 }),
@@ -217,7 +386,7 @@ export const useFlowStore = create<FlowState>()(
                     state.unsavedChanges = value;
                 }),
 
-                setIsInteracting: (value) => set((state) => { // ADD THIS
+                setIsInteracting: (value) => set((state) => {
                     state.isInteracting = value;
                 }),
 
@@ -245,12 +414,10 @@ export const useFlowStore = create<FlowState>()(
                     edges: state.edges
                 }),
                 equality: (pastState, currentState) => {
-                    // Only track significant changes
                     return JSON.stringify(pastState) === JSON.stringify(currentState);
                 },
                 handleSet: (handleSet) =>
                     throttle<typeof handleSet>((state) => {
-                        // Only record if not interacting
                         if (typeof state === 'object' && state !== null && 'isInteracting' in state && !(state as FlowState).isInteracting) {
                             handleSet(state);
                         }
@@ -260,13 +427,11 @@ export const useFlowStore = create<FlowState>()(
     )
 );
 
-// Create a hook that properly accesses the temporal store
+// Temporal store hook remains the same
 export const useTemporalStore = () => {
-    // Use a ref to cache the temporal store reference
     const temporalStoreRef = useRef((useFlowStore as any).temporal);
     const temporalStore = temporalStoreRef.current;
 
-    // Create stable function references
     const undo = useCallback(() => {
         temporalStore.getState().undo();
     }, [temporalStore]);
@@ -279,7 +444,6 @@ export const useTemporalStore = () => {
         temporalStore.getState().clear();
     }, [temporalStore]);
 
-    // Subscribe to temporal state with a stable selector
     const temporalState = useMemo(() => {
         const state = temporalStore.getState();
         return {
@@ -288,7 +452,6 @@ export const useTemporalStore = () => {
         };
     }, [temporalStore]);
 
-    // Use a subscription for reactive updates
     const [canUndo, setCanUndo] = useState(temporalState.canUndo);
     const [canRedo, setCanRedo] = useState(temporalState.canRedo);
 
