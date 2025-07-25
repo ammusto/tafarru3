@@ -12,7 +12,6 @@ import {
 import { EdgeData } from '../../types';
 import { useFlowStore } from '../../store/useFlowStore';
 
-const NODE_PADDING = 2;
 
 export const CustomEdge = memo(({
     id,
@@ -38,7 +37,7 @@ export const CustomEdge = memo(({
     }));
 
     // Calculate actual handle positions
-    const NODE_PADDING = 5; // Set your desired padding value
+    const NODE_PADDING = 2; // Set your desired padding value
 
     // In the useMemo where we calculate actual positions, apply padding after getting handle coordinates:
     const { actualSourceX, actualSourceY, actualTargetX, actualTargetY, actualSourcePosition, actualTargetPosition } = useMemo(() => {

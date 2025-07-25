@@ -6,10 +6,11 @@ import { useMemo } from 'react';
 import { debounce } from 'lodash';
 
 export function NodeInspector() {
-    const { selectedNodes, selectedEdges, nodes, edges, updateNode, updateEdge } = useFlowStore();
+    const { selectedNodes, selectedEdges, nodes, edges, updateNode, updateEdge, autoResize, setAutoResize } = useFlowStore();
     const [nodeData, setNodeData] = useState<NodeData | null>(null);
     const [edgeData, setEdgeData] = useState<EdgeData | null>(null);
-    const [multiSelect, setMultiSelect] = useState(false);
+    const [multiSelectNodes, setMultiSelectNodes] = useState(false);
+    const [multiSelectEdges, setMultiSelectEdges] = useState(false);
 
     useEffect(() => {
         if (selectedNodes.length === 1) {
@@ -17,7 +18,8 @@ export function NodeInspector() {
             if (node) {
                 setNodeData(node.data);
                 setEdgeData(null);
-                setMultiSelect(false);
+                setMultiSelectNodes(false);
+                setMultiSelectEdges(false);
             }
         } else if (selectedNodes.length > 1) {
             // Multi-select mode - only show style properties
@@ -36,19 +38,42 @@ export function NodeInspector() {
                     parentId: undefined,
                 });
                 setEdgeData(null);
-                setMultiSelect(true);
+                setMultiSelectNodes(true);
+                setMultiSelectEdges(false);
             }
         } else if (selectedEdges.length === 1) {
             const edge = edges.find(e => e.id === selectedEdges[0]);
             if (edge) {
                 setEdgeData(edge.data ?? null);
                 setNodeData(null);
-                setMultiSelect(false);
+                setMultiSelectNodes(false);
+                setMultiSelectEdges(false);
+            }
+        } else if (selectedEdges.length > 1) {
+            // Multi-select edges mode
+            const firstEdge = edges.find(e => e.id === selectedEdges[0]);
+            if (firstEdge && firstEdge.data) {
+                setEdgeData({
+                    label: '', // Clear label for multi-select
+                    lineStyle: firstEdge.data.lineStyle || 'solid',
+                    lineWidth: firstEdge.data.lineWidth || 2,
+                    lineColor: firstEdge.data.lineColor || '#b1b1b7',
+                    arrowStyle: firstEdge.data.arrowStyle || 'end',
+                    curveStyle: firstEdge.data.curveStyle || 'straight',
+                    controlPoint1X: firstEdge.data.controlPoint1X,
+                    controlPoint1Y: firstEdge.data.controlPoint1Y,
+                    controlPoint2X: firstEdge.data.controlPoint2X,
+                    controlPoint2Y: firstEdge.data.controlPoint2Y,
+                });
+                setNodeData(null);
+                setMultiSelectNodes(false);
+                setMultiSelectEdges(true);
             }
         } else {
             setNodeData(null);
             setEdgeData(null);
-            setMultiSelect(false);
+            setMultiSelectNodes(false);
+            setMultiSelectEdges(false);
         }
     }, [selectedNodes, selectedEdges, nodes, edges]);
 
@@ -67,7 +92,7 @@ export function NodeInspector() {
             setNodeData(updates);
 
             // Update all selected nodes if multi-select
-            if (multiSelect) {
+            if (multiSelectNodes) {
                 selectedNodes.forEach(nodeId => {
                     updateNode(nodeId, { [field]: value });
                 });
@@ -78,10 +103,18 @@ export function NodeInspector() {
     };
 
     const handleEdgeChange = (field: keyof EdgeData, value: any) => {
-        if (selectedEdges.length === 1 && edgeData) {
+        if (edgeData) {
             const updates = { ...edgeData, [field]: value };
             setEdgeData(updates);
-            updateEdge(selectedEdges[0], updates);
+
+            // Update all selected edges if multi-select
+            if (multiSelectEdges) {
+                selectedEdges.forEach(edgeId => {
+                    updateEdge(edgeId, { [field]: value });
+                });
+            } else if (selectedEdges.length === 1) {
+                updateEdge(selectedEdges[0], updates);
+            }
         }
     };
 
@@ -91,8 +124,9 @@ export function NodeInspector() {
         <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-4 w-80 max-h-[calc(100vh-2rem)] overflow-y-auto z-10">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="font-semibold">
-                    {multiSelect ? `Node Style (${selectedNodes.length} selected)` :
-                        nodeData ? 'Node Properties' : 'Edge Properties'}
+                    {multiSelectNodes ? `Node Style (${selectedNodes.length} selected)` :
+                        multiSelectEdges ? `Edge Style (${selectedEdges.length} selected)` :
+                            nodeData ? 'Node Properties' : 'Edge Properties'}
                 </h3>
                 <button
                     onClick={() => useFlowStore.getState().clearSelection()}
@@ -102,7 +136,7 @@ export function NodeInspector() {
                 </button>
             </div>
 
-            {nodeData && !multiSelect && (
+            {nodeData && !multiSelectNodes && (
                 <div className="space-y-3">
                     {/* Show Node ID and Parent ID */}
                     <div className="p-2 bg-gray-50 rounded">
@@ -193,6 +227,20 @@ export function NodeInspector() {
                         />
                     </div>
 
+                    {/* Add auto-resize checkbox */}
+                    <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                        <input
+                            type="checkbox"
+                            id="autoResize"
+                            checked={autoResize}
+                            onChange={(e) => setAutoResize(e.target.checked)}
+                            className="rounded"
+                        />
+                        <label htmlFor="autoResize" className="text-sm">
+                            Auto-resize width to fit text
+                        </label>
+                    </div>
+
                     <div className="border-t pt-3">
                         <h4 className="font-medium mb-2">Node Style</h4>
                         {renderNodeStyleFields()}
@@ -200,7 +248,7 @@ export function NodeInspector() {
                 </div>
             )}
 
-            {nodeData && multiSelect && (
+            {nodeData && multiSelectNodes && (
                 <div className="space-y-3">
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded">
                         <p className="text-sm text-blue-800">
@@ -211,7 +259,7 @@ export function NodeInspector() {
                 </div>
             )}
 
-            {edgeData && (
+            {edgeData && !multiSelectEdges && (
                 <div className="space-y-3">
                     <div>
                         <label className="block text-sm font-medium mb-1">Label</label>
@@ -223,68 +271,18 @@ export function NodeInspector() {
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Style</label>
-                        <select
-                            value={edgeData.curveStyle || 'straight'}
-                            onChange={(e) => handleEdgeChange('curveStyle', e.target.value)}
-                            className="w-full px-2 py-1 border rounded"
-                        >
-                            <option value="straight">Straight</option>
-                            <option value="curve">Curved (Auto)</option>
-                            <option value="bezier">Bezier (Manual)</option>
-                            <option value="elbow">Elbow</option>
-                        </select>
-                    </div>
+                    {renderEdgeStyleFields()}
+                </div>
+            )}
 
-                    <div className="grid grid-cols-3 gap-2">
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Line</label>
-                            <select
-                                value={edgeData.lineStyle || 'solid'}
-                                onChange={(e) => handleEdgeChange('lineStyle', e.target.value)}
-                                className="w-full px-2 py-1 border rounded"
-                            >
-                                <option value="solid">Solid</option>
-                                <option value="dashed">Dashed</option>
-                                <option value="dotted">Dotted</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Width</label>
-                            <input
-                                type="number"
-                                value={edgeData.lineWidth || 2}
-                                onChange={(e) => handleEdgeChange('lineWidth', parseInt(e.target.value))}
-                                className="w-full px-2 py-1 border rounded"
-                                min="1"
-                                max="10"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Color</label>
-                            <input
-                                type="text"
-                                value={edgeData.lineColor || '#b1b1b7'}
-                                onChange={(e) => handleEdgeChange('lineColor', e.target.value)}
-                                className="w-full px-2 py-1 border rounded"
-                            />
-                        </div>
+            {edgeData && multiSelectEdges && (
+                <div className="space-y-3">
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-sm text-blue-800">
+                            Style changes will apply to all {selectedEdges.length} selected edges
+                        </p>
                     </div>
-
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Arrows</label>
-                        <select
-                            value={edgeData.arrowStyle || 'end'}
-                            onChange={(e) => handleEdgeChange('arrowStyle', e.target.value)}
-                            className="w-full px-2 py-1 border rounded"
-                        >
-                            <option value="none">None</option>
-                            <option value="start">End</option>
-                            <option value="end">Start</option>
-                            <option value="both">Both</option>
-                        </select>
-                    </div>
+                    {renderEdgeStyleFields()}
                 </div>
             )}
         </div>
@@ -350,6 +348,77 @@ export function NodeInspector() {
                             className="w-full px-2 py-1 border rounded"
                         />
                     </div>
+                </div>
+            </>
+        );
+    }
+
+    function renderEdgeStyleFields() {
+        if (!edgeData) return null;
+
+        return (
+            <>
+                <div>
+                    <label className="block text-sm font-medium mb-1">Style</label>
+                    <select
+                        value={edgeData.curveStyle || 'straight'}
+                        onChange={(e) => handleEdgeChange('curveStyle', e.target.value)}
+                        className="w-full px-2 py-1 border rounded"
+                    >
+                        <option value="straight">Straight</option>
+                        <option value="curve">Curved (Auto)</option>
+                        <option value="bezier">Bezier (Manual)</option>
+                        <option value="elbow">Elbow</option>
+                    </select>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Line</label>
+                        <select
+                            value={edgeData.lineStyle || 'solid'}
+                            onChange={(e) => handleEdgeChange('lineStyle', e.target.value)}
+                            className="w-full px-2 py-1 border rounded"
+                        >
+                            <option value="solid">Solid</option>
+                            <option value="dashed">Dashed</option>
+                            <option value="dotted">Dotted</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Width</label>
+                        <input
+                            type="number"
+                            value={edgeData.lineWidth || 2}
+                            onChange={(e) => handleEdgeChange('lineWidth', parseInt(e.target.value))}
+                            className="w-full px-2 py-1 border rounded"
+                            min="1"
+                            max="10"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Color</label>
+                        <input
+                            type="text"
+                            value={edgeData.lineColor || '#b1b1b7'}
+                            onChange={(e) => handleEdgeChange('lineColor', e.target.value)}
+                            className="w-full px-2 py-1 border rounded"
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium mb-1">Arrows</label>
+                    <select
+                        value={edgeData.arrowStyle || 'end'}
+                        onChange={(e) => handleEdgeChange('arrowStyle', e.target.value)}
+                        className="w-full px-2 py-1 border rounded"
+                    >
+                        <option value="none">None</option>
+                        <option value="start">End</option>
+                        <option value="end">Start</option>
+                        <option value="both">Both</option>
+                    </select>
                 </div>
             </>
         );

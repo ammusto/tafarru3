@@ -10,6 +10,7 @@ interface FlowState {
     nodes: Node<NodeData>[];
     edges: Edge<EdgeData>[];
     shouldFitView: boolean;
+    autoResize: boolean;
 
     // UI state
     selectedNodes: string[];
@@ -32,6 +33,7 @@ interface FlowState {
     addNode: (node: Node<NodeData>) => void;
     updateNode: (nodeId: string, data: Partial<NodeData>) => void;
     deleteNodes: (nodeIds: string[]) => void;
+    setAutoResize: (value: boolean) => void;
 
     // Edge actions
     addEdge: (edge: Edge<EdgeData>) => void;
@@ -80,6 +82,8 @@ export const useFlowStore = create<FlowState>()(
                 unsavedChanges: false,
                 isInteracting: false,
                 shouldFitView: false,
+                autoResize: true,
+
 
                 // Helper to get next node ID
                 getNextNodeId: () => {
@@ -151,7 +155,7 @@ export const useFlowStore = create<FlowState>()(
                 setNodes: (nodes) => set({ nodes: [...nodes], unsavedChanges: true }),
 
                 setShouldFitView: (value) => set({ shouldFitView: value }),
-
+                setAutoResize: (value) => set({ autoResize: value }),
                 setEdges: (edges) => set({ edges: [...edges], unsavedChanges: true }),
 
                 onNodesChange: (changes) => set((state) => {

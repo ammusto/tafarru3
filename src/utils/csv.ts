@@ -151,26 +151,11 @@ export const generateCSV = (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]): s
         // Use parentId from node data
         const parentId = node.data.parentId || '';
 
-        // Find parent edge for styling information (if it exists)
-        const parentEdge = edges.find(e => {
-            // Check both directions for parent-child relationship
-            return (e.source === parentId && e.target === node.id) ||
-                (e.target === parentId && e.source === node.id);
-        });
+        // Find ALL edges from this node (including parent edge)
+        const allEdgesFromNode = edges.filter(e => e.source === node.id);
 
-        // Find additional connections - exclude parent-child edges
-        const additionalEdges = edges.filter(e => {
-            // Only edges from this node
-            if (e.source !== node.id) return false;
-
-            // Exclude if this edge connects to the parent
-            if (parentId && (e.target === parentId)) return false;
-
-            return true;
-        });
-
-        // Build ConnectionData string
-        const connectionData = additionalEdges.map(edge => {
+        // Build ConnectionData string including parent edge if it exists
+        const connectionData = allEdgesFromNode.map(edge => {
             const parts = [
                 edge.target,
                 edge.data?.curveStyle || 'straight',
@@ -210,11 +195,11 @@ export const generateCSV = (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]): s
             BorderStyle: node.data.borderStyle,
             BorderWidth: node.data.borderWidth.toString(),
             BorderColor: node.data.borderColor,
-            LineStyle: parentEdge?.data?.lineStyle || '',
-            LineWidth: parentEdge?.data?.lineWidth?.toString() || '',
-            LineColor: parentEdge?.data?.lineColor || '',
-            ArrowStyle: parentEdge?.data?.arrowStyle || '',
-            LineLabel: parentEdge?.data?.label || '',
+            LineStyle: '', // These fields are now deprecated but kept for backwards compatibility
+            LineWidth: '',
+            LineColor: '',
+            ArrowStyle: '',
+            LineLabel: '',
             X: node.position.x.toString(),
             Y: node.position.y.toString(),
             Width: node.data.width?.toString() || '',

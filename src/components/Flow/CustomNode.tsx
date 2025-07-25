@@ -5,21 +5,22 @@ import { formatNodeLabel } from '../../utils/nameFormatter';
 import { useFlowStore } from '../../store/useFlowStore';
 
 const handlePositions = [
-    { id: 'top', position: Position.Top, style: { left: '50%', top: '0' } },
-    { id: 'right', position: Position.Right, style: { top: '50%', right: '0' } },
-    { id: 'bottom', position: Position.Bottom, style: { left: '50%', bottom: '0' } },
-    { id: 'left', position: Position.Left, style: { top: '50%', left: '0' } },
+    { id: 'top', position: Position.Top, style: { left: '50%', top: '-5px' } },
+    { id: 'right', position: Position.Right, style: { top: '50%', right: '-5px' } },
+    { id: 'bottom', position: Position.Bottom, style: { left: '50%', bottom: '-5px' } },
+    { id: 'left', position: Position.Left, style: { top: '50%', left: '-5px' } },
 ];
 
 export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => {
     const { getNode, setNodes } = useReactFlow();
-    const { updateNode, gridEnabled } = useFlowStore();
+    const { updateNode, gridEnabled, autoResize } = useFlowStore();
     const textRef = useRef<HTMLDivElement>(null);
     const [isResizing, setIsResizing] = useState(false);
     const [dimensions, setDimensions] = useState({
         width: data.width || undefined,
         height: data.height || undefined
     });
+    const [minWidth, setMinWidth] = useState<number | undefined>(undefined);
     const resizeRef = useRef({ startX: 0, startY: 0, startWidth: 0, startHeight: 0, startPosX: 0, startPosY: 0 });
 
     const label = formatNodeLabel(data);
@@ -30,19 +31,46 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
         return Math.round(value / 10) * 10;
     }, [gridEnabled]);
 
-    // Auto-size on mount if no explicit dimensions
+    // Calculate minimum width based on text content
     useEffect(() => {
-        if (!data.width && textRef.current) {
-            const textRect = textRef.current.getBoundingClientRect();
-            const nodeWidth = Math.min(Math.max(textRect.width + 24, 100), 200);
-            const nodeHeight = textRect.height + 16;
-            const snappedWidth = snapToGrid(nodeWidth);
-            const snappedHeight = snapToGrid(nodeHeight);
-
-            setDimensions({ width: snappedWidth, height: snappedHeight });
-            updateNode(id, { width: snappedWidth, height: snappedHeight });
+        if (!autoResize) {
+            setMinWidth(undefined);
+            return;
         }
-    }, [id, data.width, updateNode]);
+
+        const measurer = document.createElement('div');
+        measurer.style.position = 'absolute';
+        measurer.style.visibility = 'hidden';
+        measurer.style.whiteSpace = 'nowrap'; // ⬅️ key difference
+        measurer.style.fontSize = '14px';
+        measurer.style.fontFamily = "'Segoe UI', 'Arial', sans-serif";
+        measurer.style.padding = '8px 12px';
+        measurer.innerText = label;
+
+        document.body.appendChild(measurer);
+        const rect = measurer.getBoundingClientRect();
+        document.body.removeChild(measurer);
+
+        const width = snapToGrid(rect.width + 20);
+
+        setMinWidth(width);
+        setDimensions(prev => ({ ...prev, width }));
+        updateNode(id, { width });
+    }, [label, autoResize, id, updateNode, snapToGrid]);
+
+
+    // Initial auto-size on mount if no explicit dimensions
+    useEffect(() => {
+        if (autoResize || data.width || !textRef.current) return;
+
+        const rect = textRef.current.getBoundingClientRect();
+        const width = snapToGrid(Math.min(Math.max(rect.width + 24, 100), 300));
+        const height = snapToGrid(rect.height + 16);
+
+        setDimensions({ width, height });
+        updateNode(id, { width, height });
+    }, []);
+
 
     const handleResize = useCallback((corner: string, event: React.MouseEvent) => {
         event.stopPropagation();
@@ -85,8 +113,9 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
                 newHeight = resizeRef.current.startHeight - deltaY;
             }
 
-            // Apply min size constraint before snapping
-            newWidth = Math.max(50, newWidth);
+            // Apply constraints
+            const effectiveMinWidth = autoResize && minWidth ? minWidth : 50;
+            newWidth = Math.max(effectiveMinWidth, newWidth);
             newHeight = Math.max(30, newHeight);
 
             // Snap dimensions
@@ -120,7 +149,6 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
             });
         };
 
-
         const handleMouseUp = () => {
             setIsResizing(false);
             document.removeEventListener('mousemove', handleMouseMove);
@@ -129,12 +157,12 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
 
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
-    }, [id, dimensions, getNode, updateNode, setNodes, snapToGrid]);
+    }, [id, dimensions, getNode, updateNode, setNodes, snapToGrid, autoResize, minWidth]);
 
     const nodeStyle: React.CSSProperties = {
         width: dimensions.width || 'auto',
         height: dimensions.height || 'auto',
-        minWidth: 50,
+        minWidth: autoResize && minWidth ? minWidth : 50,
         minHeight: 30,
         backgroundColor: data.nodeFillColor,
         border: `${data.borderWidth}px ${data.borderStyle} ${data.borderColor}`,
@@ -153,17 +181,14 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
         fontFamily: "'Segoe UI', 'Arial', sans-serif",
         color: 'black',
         textAlign: 'center',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: dimensions.width ? 'normal' : 'nowrap',
+        overflow: autoResize ? 'visible' : 'hidden',
+        textOverflow: autoResize ? 'unset' : 'ellipsis',
+        whiteSpace: autoResize ? 'nowrap' : 'normal',
         wordBreak: 'break-word',
-        maxWidth: '100%',
-        lineHeight: 1.4,
-        display: '-webkit-box',
-        WebkitLineClamp: Math.floor((dimensions.height || 50) / 20),
-        WebkitBoxOrient: 'vertical',
         pointerEvents: 'none',
+        lineHeight: 1.4,
     };
+
 
     return (
         <>

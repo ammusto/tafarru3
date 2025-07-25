@@ -42,7 +42,7 @@ function AppContent() {
       addNode({
         id: 'node-1',
         type: 'custom',
-        position: { x: 512, y: 384 },
+        position: { x: 510, y: 380 },
         data: {
           label: 'New Node',
           nodeShape: 'rounded',
@@ -51,7 +51,7 @@ function AppContent() {
           borderWidth: 1,
           borderColor: 'black',
           width: 120,
-          height: 40,
+          height: 30,
         },
       });
 

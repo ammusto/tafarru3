@@ -115,10 +115,19 @@ export function FlowCanvas() {
     const handleEdgeClick = useCallback((event: React.MouseEvent, edge: any) => {
         event.stopPropagation();
         if (mode === 'select') {
-            setSelectedEdges([edge.id]);
+            // Handle multi-selection with Shift key
+            if (event.shiftKey) {
+                const selectedEdgeIds = edges.filter(e => e.selected).map(e => e.id);
+                const newSelection = selectedEdgeIds.includes(edge.id)
+                    ? selectedEdgeIds.filter(id => id !== edge.id)
+                    : [...selectedEdgeIds, edge.id];
+                setSelectedEdges(newSelection);
+            } else {
+                setSelectedEdges([edge.id]);
+            }
             setSelectedNodes([]);
         }
-    }, [mode, setSelectedEdges, setSelectedNodes]);
+    }, [mode, edges, setSelectedEdges, setSelectedNodes]);
 
     const handlePaneClick = useCallback(() => {
         if (mode === 'select') {
@@ -173,7 +182,7 @@ export function FlowCanvas() {
 
                         // Default dimensions for new node
                         const defaultWidth = 120;
-                        const defaultHeight = 40;
+                        const defaultHeight = 30;
 
                         // Adjust position to center the node at click point
                         position = {
