@@ -174,6 +174,7 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
         position: 'relative',
         cursor: isResizing ? 'grabbing' : 'grab',
         userSelect: 'none',
+        lineHeight: 1,
     };
 
     const textStyle: React.CSSProperties = {
@@ -187,8 +188,12 @@ export const CustomNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
         wordBreak: 'break-word',
         pointerEvents: 'none',
         lineHeight: 1.4,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: '100%',
     };
-
 
     return (
         <>

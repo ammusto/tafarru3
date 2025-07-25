@@ -2,14 +2,18 @@ import React, { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X, Download, FileText, FileJson, FileImage, FileDown } from 'lucide-react';
 import { saveAs } from 'file-saver';
-import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useFlowStore } from '../../store/useFlowStore';
 import { generateCSV } from '../../utils/csv';
+import { toPng, toSvg } from 'html-to-image';
+import { optimize } from 'svgo';
 
 export function ExportDialog() {
     const [open, setOpen] = useState(false);
     const { nodes, edges, projectName, setUnsavedChanges } = useFlowStore();
+    const [exporting, setExporting] = useState(false);
+    const [exportProgress, setExportProgress] = useState('');
+
 
     const handleExportCSV = () => {
         const csv = generateCSV(nodes, edges);
@@ -32,25 +36,29 @@ export function ExportDialog() {
         if (!element) return;
 
         try {
-            const canvas = await html2canvas(element, {
-                backgroundColor: 'white',
-                scale: 2,
-                logging: false,
-                imageTimeout: 0,
-                onclone: (clonedDoc) => {
-                    // Hide controls and minimap in the clone
-                    const controls = clonedDoc.querySelector('.react-flow__controls');
-                    const minimap = clonedDoc.querySelector('.react-flow__minimap');
-                    if (controls) (controls as HTMLElement).style.display = 'none';
-                    if (minimap) (minimap as HTMLElement).style.display = 'none';
+            const dataUrl = await toPng(element, {
+                backgroundColor: '#ffffff',
+                quality: 1.0,
+                pixelRatio: 2,
+                filter: (node) => {
+                    // Hide controls, minimap, and background pattern
+                    if (node.classList?.contains('react-flow__controls') ||
+                        node.classList?.contains('react-flow__minimap') ||
+                        node.classList?.contains('react-flow__background')) {
+                        return false;
+                    }
+                    return true;
+                },
+                style: {
+                    // Ensure text is properly rendered
+                    transform: 'none',
                 }
             });
 
-            canvas.toBlob((blob) => {
-                if (blob) {
-                    saveAs(blob, `tafarru3_${projectName}.png`);
-                }
-            });
+            // Convert data URL to blob and save
+            const response = await fetch(dataUrl);
+            const blob = await response.blob();
+            saveAs(blob, `tafarru3_${projectName}.png`);
 
             setOpen(false);
         } catch (error) {
@@ -58,39 +66,99 @@ export function ExportDialog() {
         }
     };
 
+
+
     const handleExportSVG = async () => {
-        // For now, just export as PNG with higher quality
-        // True SVG export would require a more complex implementation
-        await handleExportPNG();
+        const element = document.querySelector('.react-flow') as HTMLElement;
+        if (!element) return;
+
+        try {
+            const dataUrl = await toSvg(element, {
+                backgroundColor: '#ffffff',
+                filter: (node) => {
+                    // Hide controls, minimap, background, and attribution
+                    if (node.classList?.contains('react-flow__controls') ||
+                        node.classList?.contains('react-flow__minimap') ||
+                        node.classList?.contains('react-flow__background') ||
+                        node.classList?.contains('react-flow__attribution')) {
+                        return false;
+                    }
+
+                    // REMOVE HANDLES - this is the key!
+                    if (node.classList?.contains('react-flow__handle')) {
+                        return false;
+                    }
+
+                    // Also remove resize handles if they exist
+                    if (node.classList?.contains('nodrag') &&
+                        (node.classList?.contains('cursor-nw-resize') ||
+                            node.classList?.contains('cursor-ne-resize') ||
+                            node.classList?.contains('cursor-sw-resize') ||
+                            node.classList?.contains('cursor-se-resize'))) {
+                        return false;
+                    }
+
+                    return true;
+                },
+            });
+            let svgString: string;
+            if (dataUrl.includes('base64')) {
+                const base64Content = dataUrl.split(',')[1];
+                svgString = atob(base64Content);
+            } else {
+                const svgContent = dataUrl.split(',')[1];
+                svgString = decodeURIComponent(svgContent);
+            }
+
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            saveAs(svgBlob, `tafarru3_${projectName}.svg`);
+
+            setOpen(false);
+        } catch (error) {
+            console.error('Error exporting SVG:', error);
+        }
     };
+
+
 
     const handleExportPDF = async () => {
         const element = document.querySelector('.react-flow') as HTMLElement;
         if (!element) return;
 
         try {
-            const canvas = await html2canvas(element, {
-                backgroundColor: 'white',
-                scale: 2,
-                logging: false,
-                imageTimeout: 0,
-                onclone: (clonedDoc) => {
-                    const controls = clonedDoc.querySelector('.react-flow__controls');
-                    const minimap = clonedDoc.querySelector('.react-flow__minimap');
-                    if (controls) (controls as HTMLElement).style.display = 'none';
-                    if (minimap) (minimap as HTMLElement).style.display = 'none';
-                }
+            const dataUrl = await toPng(element, {
+                backgroundColor: '#ffffff',
+                quality: 1.0,
+                pixelRatio: 2,
+                filter: (node) => {
+                    // Hide controls, minimap, background, and attribution
+                    if (node.classList?.contains('react-flow__controls') ||
+                        node.classList?.contains('react-flow__minimap') ||
+                        node.classList?.contains('react-flow__background') ||
+                        node.classList?.contains('react-flow__attribution')) {
+                        return false;
+                    }
+                    return true;
+                },
             });
 
-            const imgData = canvas.toDataURL('image/png');
+            // Create PDF with proper dimensions
+            const img = new Image();
+            img.src = dataUrl;
+
+            await new Promise((resolve) => {
+                img.onload = resolve;
+            });
+
             const pdf = new jsPDF({
-                orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+                orientation: img.width > img.height ? 'landscape' : 'portrait',
                 unit: 'px',
-                format: [canvas.width, canvas.height]
+                format: [img.width, img.height]
             });
 
-            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.addImage(dataUrl, 'PNG', 0, 0, img.width, img.height);
             pdf.save(`tafarru3_${projectName}.pdf`);
+
             setOpen(false);
         } catch (error) {
             console.error('Error exporting PDF:', error);
@@ -136,12 +204,29 @@ export function ExportDialog() {
 
                         <button
                             onClick={handleExportSVG}
-                            className="w-full flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                            disabled={exporting}
+                            className="w-full flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                         >
                             <FileImage size={24} className="text-purple-500" />
                             <div className="text-left">
-                                <div className="font-medium">Export as Image</div>
-                                <div className="text-sm text-gray-600">High-quality PNG format</div>
+                                <div className="font-medium">
+                                    {exporting && exportProgress === 'Optimizing SVG...' ? 'Optimizing...' :
+                                        exporting ? 'Rendering...' : 'Export as SVG'}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                    {exporting ? exportProgress : 'Vector graphics format'}
+                                </div>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={handleExportPNG}
+                            className="w-full flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            <FileImage size={24} className="text-orange-500" />
+                            <div className="text-left">
+                                <div className="font-medium">Export as PNG</div>
+                                <div className="text-sm text-gray-600">High-quality image</div>
                             </div>
                         </button>
 
